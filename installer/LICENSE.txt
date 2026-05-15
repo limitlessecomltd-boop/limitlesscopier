@@ -1,0 +1,55 @@
+﻿LIMITLESS TRADE COPIER — END USER LICENSE AGREEMENT
+====================================================
+
+Copyright © 2026 Limitless. All rights reserved.
+
+By installing, copying, or otherwise using Limitless Trade Copier ("the
+Software"), you agree to be bound by the terms of this Agreement.
+
+1. LICENSE GRANT
+   Subject to the terms below and the plan you purchased (Daily, Lifetime,
+   or Partner Free), Limitless grants you a non-exclusive, non-transferable
+   license to install and use the Software on:
+     - Daily plan:        one (1) device
+     - Lifetime plan:     up to two (2) devices simultaneously
+     - Partner Free plan: one (1) device, contingent on maintaining a
+                          minimum balance with the partner broker
+   You may not redistribute, sublicense, rent, or lease the Software.
+
+2. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+3. RISK DISCLOSURE
+   Trading financial instruments carries substantial risk and may result
+   in the loss of part or all of your invested capital. Limitless Trade
+   Copier is a trade-replication tool — it copies orders from one MT5
+   account to another and DOES NOT generate trading signals, predict
+   markets, or guarantee profits. Past performance of any account does
+   not predict future results. You are solely responsible for the
+   performance of any account you operate.
+
+4. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL LIMITLESS, ITS AUTHORS, OR ITS AFFILIATES BE LIABLE
+   FOR ANY DAMAGES (INCLUDING, WITHOUT LIMITATION, LOST PROFITS, BUSINESS
+   INTERRUPTION, OR LOST INFORMATION) ARISING OUT OF THE USE OR INABILITY
+   TO USE THE SOFTWARE, EVEN IF LIMITLESS HAS BEEN ADVISED OF THE
+   POSSIBILITY OF SUCH DAMAGES.
+
+5. THIRD-PARTY COMPONENTS
+   The Software includes the .NET 8 runtime (© Microsoft Corporation,
+   licensed under the MIT License) and an MT5 connector library. By using
+   the Software you also agree to the terms of those third-party licenses.
+
+6. TERMINATION
+   This license terminates automatically if you fail to comply with its
+   terms. Upon termination, you must uninstall the Software and destroy
+   all copies in your possession.
+
+7. CONTACT
+   Questions about this license: support@limitlesscopier.com
+   Website: https://limitlesscopier.com
+
+By clicking "I accept" you confirm you have read, understood, and agree
+to be bound by this Agreement.

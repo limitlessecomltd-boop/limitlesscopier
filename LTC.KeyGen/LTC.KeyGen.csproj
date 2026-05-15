@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net8.0-windows because LTC.Core targets that (mtapi DLL); the
+         admin tool doesn't strictly need Windows, but matching frameworks
+         keeps the build simple. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>LTC.KeyGen</RootNamespace>
+    <AssemblyName>ltc-admin</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Description>Admin command-line tool for Limitless Trade Copier. Mints license activation tokens, inspects .lic files, and debugs fingerprint mismatches. Requires the Ed25519 private key (kept outside the repo). Never ship this tool to customers — it is for internal use only.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Shares the signing + serialization codec with the app -->
+    <ProjectReference Include="..\LTC.Core\LTC.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- WMI access for the `print-fingerprint` command, which lets the
+         operator get this machine's fingerprint without having to open
+         the customer-facing app and deactivate it. -->
+    <PackageReference Include="System.Management" Version="9.0.0" />
+  </ItemGroup>
+</Project>

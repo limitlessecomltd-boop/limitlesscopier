@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>LTC.AdminApp</RootNamespace>
+    <AssemblyName>LimitlessTradeCopierAdmin</AssemblyName>
+    <Description>Limitless Trade Copier — Admin App. Operator-only tool for issuing license activation files. Never distribute to customers.</Description>
+
+    <!-- App icon: shown for the .exe in File Explorer + alt-tab + the
+         Windows taskbar. Reusing the customer brand icon for now; can
+         be swapped for an admin-specific variant (red accent) later. -->
+    <ApplicationIcon>Assets\ltc-icon.ico</ApplicationIcon>
+
+    <!-- ============================================================
+         PUBLISH SETTINGS — mirror the customer app so both installers
+         get a consistent self-contained Windows x64 build.
+            RuntimeIdentifier        win-x64 (64-bit Windows)
+            SelfContained            ship the .NET 8 runtime with the app,
+                                     so operators don't need a separate
+                                     .NET install. Bigger payload (~150MB),
+                                     but a single-EXE install just works.
+            PublishSingleFile=false  keep the assemblies as separate DLLs.
+                                     Single-file mode would unzip on each
+                                     launch, slowing startup.
+            PublishTrimmed=false     DO NOT trim. Trimming breaks WPF data
+                                     binding + reflection-heavy libraries
+                                     like CommunityToolkit.Mvvm.
+            PublishReadyToRun=true   AOT-compile common code paths into the
+                                     assemblies so cold-start is fast.
+         ============================================================ -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Shared cross-platform licensing codec (signing, serialization, fingerprint match) -->
+    <ProjectReference Include="..\LTC.Core\LTC.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WMI for the admin app's own fingerprint readout (when minting a license for THIS PC) -->
+    <PackageReference Include="System.Management" Version="9.0.0" />
+    <!-- MVVM helpers — same package the main app uses -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+  </ItemGroup>
+
+  <!--
+    Theme files (Palette.Dark.xaml, Palette.Light.xaml, Controls.xaml) and
+    fonts (.ttf) are copied from LTC.App rather than linked — the WPF SDK
+    convention auto-picks up local Themes\*.xaml as Page and Fonts\*.ttf as
+    Resource. Tried linking originally but the resulting pack URIs are
+    fragile across MSBuild versions; physical copies are bulletproof.
+    Cost: ~500KB of TTF duplication and three small XAML files. If the
+    customer app's theme changes substantially in the future, manually
+    re-copy from LTC.App\Themes to LTC.AdminApp\Themes.
+  -->
+  <ItemGroup>
+    <Resource Include="Fonts\*.ttf" />
+  </ItemGroup>
+
+  <!-- App icon: bundled as Resource so per-Window Icon="..." attributes
+       can reference it via "/Assets/ltc-icon.ico" pack URI at runtime.
+       The ApplicationIcon property above also embeds it in the EXE
+       directly for Explorer / taskbar / alt-tab. -->
+  <ItemGroup>
+    <Resource Include="Assets\ltc-icon.ico" />
+  </ItemGroup>
+
+</Project>

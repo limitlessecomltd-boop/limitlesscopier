@@ -1,0 +1,300 @@
+<Window x:Class="LTC.App.Views.EditLinkDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Copy link"
+        Icon="/Assets/ltc-icon.ico"
+        Height="680" Width="540"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource BgBaseBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        FontFamily="{StaticResource FontUi}"
+        FontSize="11"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+    <Window.Resources>
+        <!-- The global ComboBox / TextBox / CheckBox / PasswordBox themes from
+             Controls.xaml are correct (templated, dark-mode aware). We only
+             need a local TextBlock helper for label rows. Earlier versions
+             defined local DTextBox / DCombo styles that didn't include the
+             ControlTemplate — that broke dropdown popups (rendered with the
+             default Windows light theme: white text on white background). -->
+        <Style x:Key="DLabel" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource FontUi}" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="New copy link"
+                       FontFamily="{StaticResource FontUi}" FontSize="14" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Text="Send trades from a master to a slave with custom sizing rules."
+                       Style="{StaticResource TextBody}" Margin="0,4,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Padding="0,0,4,0">
+        <StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Master" Style="{StaticResource DLabel}" />
+                    <ComboBox x:Name="MasterBox" Margin="0,0,0,12"
+                              DisplayMemberPath="DisplayName" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Slave" Style="{StaticResource DLabel}" />
+                    <ComboBox x:Name="SlaveBox" Margin="0,0,0,12"
+                              DisplayMemberPath="DisplayName" />
+                </StackPanel>
+            </Grid>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Lot sizing" Style="{StaticResource DLabel}" />
+                    <ComboBox x:Name="LotModeBox" Margin="0,0,0,12" SelectedIndex="1">
+                        <ComboBoxItem Content="Fixed lot" Tag="Fixed" />
+                        <ComboBoxItem Content="Multiplier" Tag="Multiplier" />
+                        <ComboBoxItem Content="Risk %" Tag="RiskPercent" />
+                        <ComboBoxItem Content="Equity ratio" Tag="EquityRatio" />
+                        <ComboBoxItem Content="Balance ratio" Tag="BalanceRatio" />
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock x:Name="ValueLabel" Text="Multiplier" Style="{StaticResource DLabel}" />
+                    <TextBox x:Name="LotValueBox" Margin="0,0,0,12" Text="1.00" />
+                </StackPanel>
+            </Grid>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Min lot" Style="{StaticResource DLabel}" />
+                    <TextBox x:Name="MinLotBox" Margin="0,0,0,12" Text="0.01" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Max lot" Style="{StaticResource DLabel}" />
+                    <TextBox x:Name="MaxLotBox" Margin="0,0,0,12" Text="100.00" />
+                </StackPanel>
+            </Grid>
+
+            <!-- =========================================================
+                 LOT SIZING GUIDE
+                 Plain-language explanation of every sizing mode. Each row
+                 follows the same shape: bold mode name on the left, one-
+                 sentence rule + a concrete numerical example. The example
+                 uses the same numbers throughout (master 0.20 lots,
+                 master $1000, slave $500) so the user can compare modes
+                 side-by-side.
+                 ========================================================= -->
+            <Border Margin="0,4,0,0" Padding="14,12"
+                    Background="{DynamicResource BgPanelBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="3">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock Text="LOT SIZING GUIDE"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="9" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource BrandBrush}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock HorizontalAlignment="Right"
+                                   Text="example: master 0.20 lots, master $1000, slave $500"
+                                   FontFamily="{StaticResource FontUi}"
+                                   FontSize="9"
+                                   FontStyle="Italic"
+                                   Foreground="{DynamicResource TextFaintBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Each mode: name | rule | example. The name column is a
+                         fixed width so all five rows align like a spec sheet. -->
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="92" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Fixed lot"
+                                   FontFamily="{StaticResource FontUi}"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextStrongBrush}"
+                                   VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Always copies the exact lot size you set, no matter what the master traded."
+                                       FontFamily="{StaticResource FontUi}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="Set value 0.10 → slave always opens 0.10 lots."
+                                       FontFamily="{StaticResource FontMono}" FontSize="10"
+                                       Foreground="{DynamicResource TextDimBrush}"
+                                       TextWrapping="Wrap" Margin="0,1,0,0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Height="1" Background="{DynamicResource BorderFaintBrush}" Margin="0,5" />
+
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="92" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Multiplier"
+                                   FontFamily="{StaticResource FontUi}"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextStrongBrush}"
+                                   VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Master's lot size × your multiplier. Use 1.0 to copy 1:1, 0.5 for half, 2.0 for double."
+                                       FontFamily="{StaticResource FontUi}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="Multiplier 0.5 → slave opens 0.10 lots (0.20 × 0.5)."
+                                       FontFamily="{StaticResource FontMono}" FontSize="10"
+                                       Foreground="{DynamicResource TextDimBrush}"
+                                       TextWrapping="Wrap" Margin="0,1,0,0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Height="1" Background="{DynamicResource BorderFaintBrush}" Margin="0,5" />
+
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="92" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Risk %"
+                                   FontFamily="{StaticResource FontUi}"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextStrongBrush}"
+                                   VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Risks a fixed % of slave equity per trade. Master MUST set a stop-loss — slave volume is sized so a hit SL costs that %."
+                                       FontFamily="{StaticResource FontUi}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="Risk 1% on $500 = $5 max loss. Volume depends on SL distance."
+                                       FontFamily="{StaticResource FontMono}" FontSize="10"
+                                       Foreground="{DynamicResource TextDimBrush}"
+                                       TextWrapping="Wrap" Margin="0,1,0,0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Height="1" Background="{DynamicResource BorderFaintBrush}" Margin="0,5" />
+
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="92" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Equity ratio"
+                                   FontFamily="{StaticResource FontUi}"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextStrongBrush}"
+                                   VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Scales by the live equity ratio (slave ÷ master), then × your value. Reflects floating P&amp;L — moves with the market."
+                                       FontFamily="{StaticResource FontUi}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="Slave $500 / Master $1000 = 0.5. Value 1.0 → slave opens 0.10 lots."
+                                       FontFamily="{StaticResource FontMono}" FontSize="10"
+                                       Foreground="{DynamicResource TextDimBrush}"
+                                       TextWrapping="Wrap" Margin="0,1,0,0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Height="1" Background="{DynamicResource BorderFaintBrush}" Margin="0,5" />
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="92" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Balance ratio"
+                                   FontFamily="{StaticResource FontUi}"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextStrongBrush}"
+                                   VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Same as Equity ratio but uses BALANCE (no open trades counted). More stable — doesn't drift if positions go up or down."
+                                       FontFamily="{StaticResource FontUi}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="Slave $500 / Master $1000 = 0.5. Value 1.0 → slave opens 0.10 lots."
+                                       FontFamily="{StaticResource FontMono}" FontSize="10"
+                                       Foreground="{DynamicResource TextDimBrush}"
+                                       TextWrapping="Wrap" Margin="0,1,0,0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Footnote that applies to all modes -->
+                    <Border Margin="0,10,0,0" Padding="0,8,0,0"
+                            BorderBrush="{DynamicResource BorderFaintBrush}"
+                            BorderThickness="0,1,0,0">
+                        <TextBlock TextWrapping="Wrap"
+                                   FontFamily="{StaticResource FontUi}" FontSize="10"
+                                   Foreground="{DynamicResource TextDimBrush}">
+                            <Run Text="Whatever the math computes is rounded to your slave broker's volume step (typically 0.01)." />
+                            <LineBreak />
+                            <Run Text="Min/max lot above act as final safety bounds — below min skips the trade, above max clamps down." />
+                        </TextBlock>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="Options" Style="{StaticResource DLabel}" Margin="0,14,0,0" />
+            <CheckBox x:Name="ReverseBox" Content="Reverse copy (Buy ↔ Sell)" />
+        </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" x:Name="ErrorText"
+                       Foreground="{DynamicResource StatusErrBrush}"
+                       FontFamily="{StaticResource FontUi}" FontSize="11"
+                       VerticalAlignment="Center" TextWrapping="Wrap"
+                       Margin="0,0,14,0" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource GhostButton}" Content="Cancel"
+                        Margin="0,0,8,0" Click="OnCancelClick" IsCancel="True" />
+                <Button Style="{StaticResource PrimaryButton}" Content="Create link"
+                        Click="OnSaveClick" IsDefault="True" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

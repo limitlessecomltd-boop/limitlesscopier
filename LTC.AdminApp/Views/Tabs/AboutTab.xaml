@@ -1,0 +1,99 @@
+<UserControl x:Class="LTC.AdminApp.Views.Tabs.AboutTab"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Background="{DynamicResource BgBaseBrush}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,24,32,24">
+            <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+
+                <TextBlock Text="ABOUT"
+                           FontFamily="{StaticResource FontDisplay}" FontSize="28"
+                           Foreground="{DynamicResource TextStrongBrush}"
+                           LineHeight="28" />
+                <TextBlock Text="Limitless Trade Copier — Admin"
+                           FontSize="14"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="0,4,0,28" />
+
+                <!-- Security warning -->
+                <Border Background="#2A1F0E"
+                        BorderBrush="{DynamicResource StatusWarnBrush}"
+                        BorderThickness="1" CornerRadius="6"
+                        Padding="20,16" Margin="0,0,0,16">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="⚠"
+                                       FontSize="16" FontWeight="Bold"
+                                       Foreground="{DynamicResource StatusWarnBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,10,0" />
+                            <TextBlock Text="OPERATOR-ONLY"
+                                       FontFamily="{StaticResource FontMono}" FontSize="11"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource StatusWarnBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock TextWrapping="Wrap" FontSize="12"
+                                   Foreground="{DynamicResource TextStrongBrush}">
+                            <Run Text="This application holds the Ed25519 private key used to sign every Limitless Trade Copier license. " />
+                            <Run Text="If this executable and its keygen-private.key file leak, anyone could mint valid licenses for the customer app — every existing license would need to be re-issued under a new keypair." FontWeight="Medium" />
+                        </TextBlock>
+                        <TextBlock TextWrapping="Wrap" FontSize="11"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,10,0,0">
+                            <Run Text="Never:" FontWeight="Medium" />
+                            <Run Text=" ship this app to customers · commit keygen-private.key to git · run on a shared machine · email the .key file even to yourself" />
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <!-- Build info -->
+                <Border Background="{DynamicResource BgPanelBrush}"
+                        BorderBrush="{DynamicResource BorderDefaultBrush}"
+                        BorderThickness="1" CornerRadius="6"
+                        Padding="22,18">
+                    <StackPanel>
+                        <TextBlock Text="BUILD"
+                                   FontFamily="{StaticResource FontMono}" FontSize="9"
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource BrandBrush}"
+                                   Margin="0,0,0,12" />
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Version"
+                                       FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="0.1 (admin)"
+                                       FontFamily="{StaticResource FontMono}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Crypto"
+                                       FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,8,0,0" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Ed25519 (NSec.Cryptography)"
+                                       FontFamily="{StaticResource FontMono}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,8,0,0" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Token format"
+                                       FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,8,0,0" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="v1"
+                                       FontFamily="{StaticResource FontMono}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,8,0,0" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

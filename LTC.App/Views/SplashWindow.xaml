@@ -1,0 +1,326 @@
+<Window x:Class="LTC.App.Views.SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Limitless Trade Copier"
+        Width="560" Height="380"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        FontFamily="{StaticResource FontUi}"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <!-- Outer border = the actual paneled surface. Background is pure black to
+         match the Trader Cockpit chrome; on Light theme the BgVoidBrush key
+         retints to the cream paper tone, so the splash respects either theme. -->
+    <Border Background="{DynamicResource BgVoidBrush}"
+            BorderBrush="{DynamicResource BorderStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="6">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />        <!-- Logo + wordmark + tagline trio -->
+                <RowDefinition Height="Auto" />     <!-- Progress bar -->
+                <RowDefinition Height="32" />       <!-- Bottom version slug -->
+            </Grid.RowDefinitions>
+
+            <!-- =============================================================
+                 Center stack: logo, then "LIMITLESS", then tagline,
+                 then the Simply / Legendary / Copier reveal.
+                 ============================================================= -->
+            <StackPanel Grid.Row="0"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center">
+
+                <!-- Logo: two circles + amber merge zone.
+                     Each layer has its own RenderTransform so we can animate
+                     the green from the left, red from the right, then fade
+                     in the amber overlap independently. -->
+                <Grid Width="120" Height="68"
+                      HorizontalAlignment="Center"
+                      Margin="0,0,0,28">
+                    <!-- Green (master/buy/profit) - slides in from the left -->
+                    <Ellipse x:Name="GreenCircle"
+                             Width="56" Height="56"
+                             Fill="{DynamicResource StatusOkBrush}"
+                             HorizontalAlignment="Left"
+                             VerticalAlignment="Center"
+                             Margin="8,0,0,0"
+                             Opacity="0"
+                             RenderTransformOrigin="0.5,0.5">
+                        <Ellipse.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform ScaleX="0.5" ScaleY="0.5" />
+                                <TranslateTransform X="-32" />
+                            </TransformGroup>
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+
+                    <!-- Red (slave/sell/loss) - slides in from the right -->
+                    <Ellipse x:Name="RedCircle"
+                             Width="56" Height="56"
+                             Fill="{DynamicResource StatusErrBrush}"
+                             HorizontalAlignment="Right"
+                             VerticalAlignment="Center"
+                             Margin="0,0,8,0"
+                             Opacity="0"
+                             RenderTransformOrigin="0.5,0.5">
+                        <Ellipse.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform ScaleX="0.5" ScaleY="0.5" />
+                                <TranslateTransform X="32" />
+                            </TransformGroup>
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+
+                    <!-- Amber overlap "vesica piscis" - the lens shape formed
+                         where the two circles intersect. Drawn as a Path with
+                         two arc commands so it's a true geometric intersection,
+                         not a faked oval. Fades in only after both circles
+                         have arrived. -->
+                    <Path x:Name="AmberMerge"
+                          Fill="{DynamicResource BrandBrush}"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Opacity="0"
+                          Data="M 60,12 A 28,28 0 0 1 60,68 A 28,28 0 0 1 60,12 Z"
+                          Stretch="None">
+                        <!-- The path is sized for two 56px-diameter circles
+                             whose centers are 32px apart (each at x=36 and x=68
+                             in a 0..120 coordinate space). -->
+                    </Path>
+                </Grid>
+
+                <!-- LIMITLESS wordmark - fades up. Bebas Neue at 72pt is the
+                     dramatic display centerpiece. We don't set FontWeight here
+                     because Bebas Neue is single-weight (Regular only); WPF
+                     would synthesize a fake-bold which looks coarse. -->
+                <TextBlock x:Name="WordmarkText"
+                           Text="LIMITLESS"
+                           FontFamily="{StaticResource FontDisplay}"
+                           FontSize="72"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           HorizontalAlignment="Center"
+                           Opacity="0"
+                           RenderTransformOrigin="0.5,1">
+                    <TextBlock.RenderTransform>
+                        <TranslateTransform Y="10" />
+                    </TextBlock.RenderTransform>
+                </TextBlock>
+
+                <!-- Tracked-out tagline - fades in beneath the wordmark -->
+                <TextBlock x:Name="TaglineText"
+                           Text="T R A D E   C O P I E R"
+                           FontFamily="{StaticResource FontMono}"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource BrandBrush}"
+                           HorizontalAlignment="Center"
+                           Margin="0,8,0,32"
+                           Opacity="0" />
+
+                <!-- Tagline reveal: "Copy your Limitless Opportunities".
+                     Each emphasis word fades in sequentially, picking up the
+                     same green / amber / red rhythm as the logo. The connector
+                     word "your" rides along with "Limitless" so we don't burn
+                     a whole reveal beat on a function word.
+                     The x:Names (WordSimply / WordLegendary / WordCopier) are
+                     legacy from the previous tagline; they're kept so the
+                     existing storyboard keyframes still target the right
+                     elements without any animation rework. -->
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Center">
+                    <TextBlock x:Name="WordSimply"
+                               Text="Copy"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource StatusOkBrush}"
+                               Opacity="0"
+                               RenderTransformOrigin="0.5,1">
+                        <TextBlock.RenderTransform><TranslateTransform Y="6" /></TextBlock.RenderTransform>
+                    </TextBlock>
+                    <TextBlock x:Name="WordLegendary"
+                               FontSize="16"
+                               Opacity="0"
+                               Margin="6,0,0,0"
+                               RenderTransformOrigin="0.5,1">
+                        <!-- "your" stays muted — it's a function word, the eye
+                             should glide over it to the next emphasis term. -->
+                        <Run Text="your"
+                             FontWeight="Normal"
+                             Foreground="{DynamicResource TextMutedBrush}" />
+                        <Run Text=" Limitless"
+                             FontWeight="Bold"
+                             Foreground="{DynamicResource BrandBrush}" />
+                        <TextBlock.RenderTransform><TranslateTransform Y="6" /></TextBlock.RenderTransform>
+                    </TextBlock>
+                    <TextBlock x:Name="WordCopier"
+                               Text="Opportunities"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource StatusErrBrush}"
+                               Margin="6,0,0,0"
+                               Opacity="0"
+                               RenderTransformOrigin="0.5,1">
+                        <TextBlock.RenderTransform><TranslateTransform Y="6" /></TextBlock.RenderTransform>
+                    </TextBlock>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Progress strip: 200px-wide track with a brand-colored fill that
+                 grows from 0 to 200px over the full splash duration. Acts as
+                 visual feedback that something IS happening, plus signposts
+                 when the splash is about to finish. -->
+            <Grid Grid.Row="1"
+                  Width="200" Height="2"
+                  HorizontalAlignment="Center"
+                  Margin="0,0,0,20">
+                <Border Background="{DynamicResource BorderSubtleBrush}" />
+                <Border x:Name="ProgressFill"
+                        Width="0"
+                        Background="{DynamicResource BrandBrush}"
+                        HorizontalAlignment="Left" />
+            </Grid>
+
+            <!-- Bottom row: small version slug, mono caps, dim. Reads like
+                 a terminal prompt. -->
+            <Grid Grid.Row="2"
+                  Margin="20,0">
+                <TextBlock x:Name="VersionText"
+                           FontFamily="{StaticResource FontMono}"
+                           FontSize="9"
+                           Foreground="{DynamicResource TextFaintBrush}"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Center"
+                           Text="" />
+            </Grid>
+        </Grid>
+    </Border>
+
+    <!-- =================================================================
+         Master storyboard - all timings keyed off the same root so the
+         sequence stays in lockstep regardless of when the storyboard
+         actually starts running.
+         ================================================================= -->
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="Window.Loaded">
+            <BeginStoryboard>
+                <Storyboard>
+                    <!-- Green circle: scale up from 0.5 to 1.0 and slide from
+                         x=-32 to x=0 over 0.6s starting at 0.3s. -->
+                    <DoubleAnimation Storyboard.TargetName="GreenCircle"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="0.95"
+                                     BeginTime="0:0:0.3" Duration="0:0:0.6" />
+                    <DoubleAnimation Storyboard.TargetName="GreenCircle"
+                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                     From="0.5" To="1" BeginTime="0:0:0.3" Duration="0:0:0.6">
+                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="GreenCircle"
+                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                     From="0.5" To="1" BeginTime="0:0:0.3" Duration="0:0:0.6">
+                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="GreenCircle"
+                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.X)"
+                                     From="-32" To="0" BeginTime="0:0:0.3" Duration="0:0:0.6">
+                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+
+                    <!-- Red circle: same animation pattern, starts 0.3s after green -->
+                    <DoubleAnimation Storyboard.TargetName="RedCircle"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="0.95"
+                                     BeginTime="0:0:0.6" Duration="0:0:0.6" />
+                    <DoubleAnimation Storyboard.TargetName="RedCircle"
+                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                     From="0.5" To="1" BeginTime="0:0:0.6" Duration="0:0:0.6">
+                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="RedCircle"
+                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                     From="0.5" To="1" BeginTime="0:0:0.6" Duration="0:0:0.6">
+                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="RedCircle"
+                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.X)"
+                                     From="32" To="0" BeginTime="0:0:0.6" Duration="0:0:0.6">
+                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+
+                    <!-- Amber merge: fades in once both circles are seated -->
+                    <DoubleAnimation Storyboard.TargetName="AmberMerge"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1"
+                                     BeginTime="0:0:1.0" Duration="0:0:0.5" />
+
+                    <!-- LIMITLESS wordmark: opacity + slide up -->
+                    <DoubleAnimation Storyboard.TargetName="WordmarkText"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1"
+                                     BeginTime="0:0:1.3" Duration="0:0:0.7" />
+                    <DoubleAnimation Storyboard.TargetName="WordmarkText"
+                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                     From="10" To="0"
+                                     BeginTime="0:0:1.3" Duration="0:0:0.7">
+                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+
+                    <!-- Tagline: opacity fade -->
+                    <DoubleAnimation Storyboard.TargetName="TaglineText"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1"
+                                     BeginTime="0:0:1.7" Duration="0:0:0.6" />
+
+                    <!-- Three-word reveal: SIMPLY (green), LEGENDARY (amber), COPIER (red) -->
+                    <DoubleAnimation Storyboard.TargetName="WordSimply"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1"
+                                     BeginTime="0:0:2.2" Duration="0:0:0.5" />
+                    <DoubleAnimation Storyboard.TargetName="WordSimply"
+                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                     From="6" To="0"
+                                     BeginTime="0:0:2.2" Duration="0:0:0.5">
+                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+
+                    <DoubleAnimation Storyboard.TargetName="WordLegendary"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1"
+                                     BeginTime="0:0:2.6" Duration="0:0:0.5" />
+                    <DoubleAnimation Storyboard.TargetName="WordLegendary"
+                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                     From="6" To="0"
+                                     BeginTime="0:0:2.6" Duration="0:0:0.5">
+                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+
+                    <DoubleAnimation Storyboard.TargetName="WordCopier"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1"
+                                     BeginTime="0:0:3.0" Duration="0:0:0.5" />
+                    <DoubleAnimation Storyboard.TargetName="WordCopier"
+                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                     From="6" To="0"
+                                     BeginTime="0:0:3.0" Duration="0:0:0.5">
+                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+
+                    <!-- Progress bar fills over the full splash window. Stops
+                         a bit before the close (4.6s of 4.8s) so the user
+                         briefly sees a fully-filled bar before dismissal. -->
+                    <DoubleAnimation Storyboard.TargetName="ProgressFill"
+                                     Storyboard.TargetProperty="Width"
+                                     From="0" To="200"
+                                     BeginTime="0:0:0.2" Duration="0:0:4.4" />
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+    </Window.Triggers>
+</Window>

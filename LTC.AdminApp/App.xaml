@@ -1,0 +1,26 @@
+<Application x:Class="LTC.AdminApp.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="Views/MainWindow.xaml">
+    <Application.Resources>
+        <!--
+            Theme bootstrap. We load:
+              - Palette.Dark.xaml first  (provides color + brush keys)
+              - Controls.xaml second     (button styles, etc. that reference the brushes)
+
+            Same pattern as the customer app. If the operator ever wants light
+            theme, swap Palette.Dark.xaml → Palette.Light.xaml at runtime (we
+            keep dark as default since most admin work is done in dim rooms).
+
+            The relative paths use the linked-file layout we set in csproj:
+            both files appear at the equivalent of "Themes\X.xaml" in the
+            assembly's resource tree.
+        -->
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Palette.Dark.xaml" />
+                <ResourceDictionary Source="Themes/Controls.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

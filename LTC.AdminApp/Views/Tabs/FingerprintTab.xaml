@@ -1,0 +1,141 @@
+<UserControl x:Class="LTC.AdminApp.Views.Tabs.FingerprintTab"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Background="{DynamicResource BgBaseBrush}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,24,32,24">
+            <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+
+                <TextBlock Text="THIS MACHINE'S FINGERPRINT"
+                           FontFamily="{StaticResource FontDisplay}" FontSize="28"
+                           Foreground="{DynamicResource TextStrongBrush}"
+                           LineHeight="28" />
+                <TextBlock Text="Use this when you want to issue a license bound to THIS PC — e.g. for your own dev testing."
+                           FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="0,4,0,28" />
+
+                <!-- Short fingerprint, big -->
+                <Border Background="{DynamicResource BgPanelBrush}"
+                        BorderBrush="{DynamicResource BorderDefaultBrush}"
+                        BorderThickness="1" CornerRadius="6"
+                        Padding="22,18" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="SHORT (8 CHARS)"
+                                   FontFamily="{StaticResource FontMono}" FontSize="9"
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource BrandBrush}"
+                                   Margin="0,0,0,8" />
+                        <TextBlock x:Name="ShortText"
+                                   Text="••••••••"
+                                   FontFamily="{StaticResource FontMono}" FontSize="30"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Full fingerprint with copy button -->
+                <Border Background="{DynamicResource BgPanelBrush}"
+                        BorderBrush="{DynamicResource BorderDefaultBrush}"
+                        BorderThickness="1" CornerRadius="6"
+                        Padding="22,18" Margin="0,0,0,16">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="FULL (PASS TO MINT)"
+                                       FontFamily="{StaticResource FontMono}" FontSize="9"
+                                       FontWeight="Medium"
+                                       Foreground="{DynamicResource BrandBrush}"
+                                       VerticalAlignment="Center" />
+                            <Button Grid.Column="1"
+                                    Content="Copy"
+                                    Style="{StaticResource GhostButton}"
+                                    Padding="14,4" FontSize="10"
+                                    Click="OnCopyFullClick" />
+                        </Grid>
+                        <Border Background="{DynamicResource BgRaisedBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1" CornerRadius="3"
+                                Padding="10,8">
+                            <TextBox x:Name="FullText"
+                                     IsReadOnly="True"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     Foreground="{DynamicResource TextPrimaryBrush}"
+                                     FontFamily="{StaticResource FontMono}" FontSize="11"
+                                     TextWrapping="Wrap"
+                                     Text="loading..." />
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Component breakdown -->
+                <Border Background="{DynamicResource BgPanelBrush}"
+                        BorderBrush="{DynamicResource BorderDefaultBrush}"
+                        BorderThickness="1" CornerRadius="6"
+                        Padding="22,18" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="COMPONENTS"
+                                   FontFamily="{StaticResource FontMono}" FontSize="9"
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource BrandBrush}"
+                                   Margin="0,0,0,12" />
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Machine GUID"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" x:Name="MachineGuidText"
+                                       FontFamily="{StaticResource FontMono}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="CPU ID"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,8,0,0" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" x:Name="CpuIdText"
+                                       FontFamily="{StaticResource FontMono}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,8,0,0" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Baseboard serial"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,8,0,0" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" x:Name="BaseboardText"
+                                       FontFamily="{StaticResource FontMono}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,8,0,0" />
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="BIOS UUID"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,8,0,0" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" x:Name="BiosUuidText"
+                                       FontFamily="{StaticResource FontMono}" FontSize="11"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,8,0,0" />
+                        </Grid>
+                        <TextBlock Text="Each component is SHA-256 hashed (truncated to 16 bytes hex)."
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextDimBrush}"
+                                   Margin="0,14,0,0" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

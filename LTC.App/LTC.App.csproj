@@ -1,0 +1,102 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <!-- ApplicationIcon is the EXE-level icon Windows shows in File Explorer
+         and the alt-tab switcher when the window itself doesn't override.
+         We point this at the multi-resolution ICO under Assets/. -->
+    <ApplicationIcon>Assets\ltc-icon.ico</ApplicationIcon>
+    <AssemblyName>LimitlessTradeCopier</AssemblyName>
+    <RootNamespace>LTC.App</RootNamespace>
+    <Description>Limitless Trade Copier - WPF desktop application.</Description>
+    <Version>1.0.0</Version>
+    <Company>Limitless</Company>
+    <Product>Limitless Trade Copier</Product>
+
+    <!-- ============================================================
+         PUBLISH PROFILE for the standalone installer.
+         These values kick in only when you run `dotnet publish`. They
+         configure a self-contained Windows-x64 build so the resulting
+         folder runs on any clean Windows machine without requiring the
+         user to install .NET 8 separately.
+
+         RuntimeIdentifier         win-x64 (64-bit Windows)
+         SelfContained             ship the entire .NET 8 runtime alongside
+                                   our app so users don't see "please install
+                                   .NET" dialogs
+         PublishSingleFile=false   we DON'T merge into a single EXE because
+                                   mtapi.mt5.dll is loaded via reflection
+                                   and the SingleFile bundler would hide it.
+                                   Instead we let the publish drop a normal
+                                   folder and Inno Setup wraps that folder
+                                   into the user-facing installer.
+         IncludeNativeLibrariesForSelfExtract is left default (true) because
+                                   it doesn't hurt with PublishSingleFile=false.
+         PublishTrimmed=false      DO NOT trim. CommunityToolkit.Mvvm uses
+                                   reflection on [ObservableProperty] generated
+                                   members; trimming would silently break
+                                   property change notifications at runtime.
+         ============================================================ -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+    <PackageReference Include="Serilog" Version="4.0.2" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <!-- NSec is a thin .NET wrapper around libsodium, the standard crypto
+         library for Ed25519 signatures. ~5MB native dependency, audited,
+         widely used. We use it ONLY for license signature verification. -->
+    <PackageReference Include="NSec.Cryptography" Version="24.4.0" />
+    <!-- WMI access for hardware fingerprinting (Win32_Processor, Win32_BaseBoard,
+         Win32_ComputerSystemProduct). System.Management is the in-box .NET package
+         for WMI queries on Windows. -->
+    <PackageReference Include="System.Management" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LTC.Core\LTC.Core.csproj" />
+    <ProjectReference Include="..\LTC.Persistence\LTC.Persistence.csproj" />
+  </ItemGroup>
+
+  <!--
+    Explicit copy of the broker DLL into this app's output folder. LTC.Core
+    already references it via <Reference>, but the file lands there as a
+    renamed "mt5api.dll" matching the internal assembly identity. The original
+    name "mtapi.mt5.dll" is also copied so the AssemblyResolve fallback in
+    App.xaml.cs can locate it by either name.
+  -->
+  <ItemGroup>
+    <None Include="..\lib\mtapi.mt5.dll">
+      <Link>mtapi.mt5.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+
+  <!-- Bundle TTF fonts as Resource (embedded into the assembly, accessible via pack URI) -->
+  <ItemGroup>
+    <Resource Include="Fonts\*.ttf" />
+  </ItemGroup>
+
+  <!-- App icon: bundled as Resource so per-Window Icon="..." attributes can
+       reference it via "/Assets/ltc-icon.ico" pack URI at runtime. The csproj's
+       ApplicationIcon property above embeds the same file in the EXE for File
+       Explorer / taskbar use. -->
+  <ItemGroup>
+    <Resource Include="Assets\ltc-icon.ico" />
+  </ItemGroup>
+
+</Project>

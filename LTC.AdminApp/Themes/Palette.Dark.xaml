@@ -1,0 +1,123 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- =====================================================================
+         BLOOMBERG-MODERN PALETTE
+         Deep true-black backgrounds, dense data tone, high-contrast amber and
+         cyan as the two signal colors. Status colors are pure-RGB (saturated)
+         for at-a-glance scanning. No gradients, no rounded soft cards — every
+         surface is a flat panel with hairline dividers, the way a trading
+         terminal should read.
+         ===================================================================== -->
+
+    <!-- Backgrounds: pure dark neutrals, with subtle elevation steps.
+         No color tint — lets the brand gold pop where it appears, and
+         keeps the UI feeling clean rather than themed. -->
+    <Color x:Key="BgVoid">#000000</Color>      <!-- chrome (top bar, status bar) -->
+    <Color x:Key="BgBase">#0A0A0C</Color>      <!-- main panes -->
+    <Color x:Key="BgDeep">#070708</Color>      <!-- deeper layer -->
+    <Color x:Key="BgPanel">#131316</Color>     <!-- nodes / cards (lifted from base) -->
+    <Color x:Key="BgSelected">#1E1E22</Color>  <!-- selected lift -->
+    <Color x:Key="BgHover">#1A1A1E</Color>     <!-- hover state -->
+    <Color x:Key="BgRaised">#17171B</Color>    <!-- elevated chip/tag -->
+
+    <!-- Borders: hairline, very low contrast. Modern dark UIs (Linear,
+         Notion, Cursor) use barely-there borders rather than the heavier
+         data-grid lines we had. Lets typography + spacing do the
+         hierarchy work instead of dividers. -->
+    <Color x:Key="BorderFaint">#1A1A1D</Color>
+    <Color x:Key="BorderSubtle">#26262B</Color>
+    <Color x:Key="BorderDefault">#33333A</Color>
+    <Color x:Key="BorderStrong">#4A4A52</Color>
+    <Color x:Key="BorderMaster">#1F3A5C</Color>     <!-- cyan-tinted (kept for master accent) -->
+    <Color x:Key="BorderSlave">#3A2D14</Color>      <!-- amber-tinted (kept for slave accent) -->
+
+    <!-- Text: in DARK theme, all greys are pushed bright enough to read
+         against the black background. Light theme keeps its own dimmer
+         greys (which work fine on cream paper). -->
+    <Color x:Key="TextPrimary">#FFFFFF</Color>      <!-- pure white: numbers, names, headers -->
+    <Color x:Key="TextStrong">#F0F1F3</Color>       <!-- near-white: secondary names, page titles -->
+    <Color x:Key="TextMuted">#D4D6DA</Color>        <!-- bright mid: meta info, broker labels -->
+    <Color x:Key="TextDim">#B8BABF</Color>          <!-- still readable: timestamps, section labels -->
+    <Color x:Key="TextFaint">#9E9FA3</Color>        <!-- the floor — small caps labels must stay legible -->
+
+    <!-- Accents — Bloomberg amber + terminal cyan, the two signal colors -->
+    <Color x:Key="Brand">#FF9F1C</Color>            <!-- amber: brand mark + primary action -->
+    <Color x:Key="BrandDim">#C77B12</Color>
+    <Color x:Key="BrandGlow">#FFB347</Color>        <!-- hover/pressed lift -->
+
+    <Color x:Key="Accent">#22D3EE</Color>           <!-- cyan: secondary highlights, links -->
+    <Color x:Key="AccentDim">#0EA5C0</Color>
+
+    <!-- Master/slave role tints — derived from the two accents -->
+    <Color x:Key="Master">#22D3EE</Color>           <!-- cyan -->
+    <Color x:Key="Slave">#FF9F1C</Color>            <!-- amber -->
+
+    <!-- Status: saturated for fast scanning -->
+    <Color x:Key="StatusOk">#10B981</Color>         <!-- green -->
+    <Color x:Key="StatusWarn">#FBBF24</Color>       <!-- amber-yellow -->
+    <Color x:Key="StatusErr">#F43F5E</Color>        <!-- rose-red -->
+
+    <!-- Tints for pill backgrounds -->
+    <Color x:Key="OkTint">#0E2A22</Color>
+    <Color x:Key="WarnTint">#3A2A0E</Color>
+    <Color x:Key="ErrTint">#2A0F17</Color>
+    <Color x:Key="BrandTint">#2A1A0A</Color>
+    <Color x:Key="AccentTint">#062A30</Color>
+
+    <!-- ====================================================================
+         Brushes
+         ==================================================================== -->
+    <SolidColorBrush x:Key="BgVoidBrush"     Color="{StaticResource BgVoid}" />
+    <SolidColorBrush x:Key="BgBaseBrush"     Color="{StaticResource BgBase}" />
+    <SolidColorBrush x:Key="BgDeepBrush"     Color="{StaticResource BgDeep}" />
+    <SolidColorBrush x:Key="BgPanelBrush"    Color="{StaticResource BgPanel}" />
+    <SolidColorBrush x:Key="BgSelectedBrush" Color="{StaticResource BgSelected}" />
+    <SolidColorBrush x:Key="BgHoverBrush"    Color="{StaticResource BgHover}" />
+    <SolidColorBrush x:Key="BgRaisedBrush"   Color="{StaticResource BgRaised}" />
+
+    <SolidColorBrush x:Key="BorderFaintBrush"   Color="{StaticResource BorderFaint}" />
+    <SolidColorBrush x:Key="BorderSubtleBrush"  Color="{StaticResource BorderSubtle}" />
+    <SolidColorBrush x:Key="BorderDefaultBrush" Color="{StaticResource BorderDefault}" />
+    <SolidColorBrush x:Key="BorderStrongBrush"  Color="{StaticResource BorderStrong}" />
+    <SolidColorBrush x:Key="BorderMasterBrush"  Color="{StaticResource BorderMaster}" />
+    <SolidColorBrush x:Key="BorderSlaveBrush"   Color="{StaticResource BorderSlave}" />
+
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}" />
+    <SolidColorBrush x:Key="TextStrongBrush"  Color="{StaticResource TextStrong}" />
+    <SolidColorBrush x:Key="TextMutedBrush"   Color="{StaticResource TextMuted}" />
+    <SolidColorBrush x:Key="TextDimBrush"     Color="{StaticResource TextDim}" />
+    <SolidColorBrush x:Key="TextFaintBrush"   Color="{StaticResource TextFaint}" />
+
+    <SolidColorBrush x:Key="BrandBrush"      Color="{StaticResource Brand}" />
+    <SolidColorBrush x:Key="BrandDimBrush"   Color="{StaticResource BrandDim}" />
+    <SolidColorBrush x:Key="BrandGlowBrush"  Color="{StaticResource BrandGlow}" />
+    <SolidColorBrush x:Key="AccentBrush"     Color="{StaticResource Accent}" />
+    <SolidColorBrush x:Key="AccentDimBrush"  Color="{StaticResource AccentDim}" />
+
+    <SolidColorBrush x:Key="MasterBrush"     Color="{StaticResource Master}" />
+    <SolidColorBrush x:Key="SlaveBrush"      Color="{StaticResource Slave}" />
+
+    <SolidColorBrush x:Key="StatusOkBrush"   Color="{StaticResource StatusOk}" />
+    <SolidColorBrush x:Key="StatusWarnBrush" Color="{StaticResource StatusWarn}" />
+    <SolidColorBrush x:Key="StatusErrBrush"  Color="{StaticResource StatusErr}" />
+
+    <SolidColorBrush x:Key="OkTintBrush"     Color="{StaticResource OkTint}" />
+    <SolidColorBrush x:Key="WarnTintBrush"   Color="{StaticResource WarnTint}" />
+    <SolidColorBrush x:Key="ErrTintBrush"    Color="{StaticResource ErrTint}" />
+    <SolidColorBrush x:Key="BrandTintBrush"  Color="{StaticResource BrandTint}" />
+    <SolidColorBrush x:Key="AccentTintBrush" Color="{StaticResource AccentTint}" />
+
+    <!-- ====================================================================
+         Typography — fonts-only here, sizes are decided per-element
+         ==================================================================== -->
+    <!-- Typography. Three families:
+           FontUi      — DM Sans, the body sans serif (geometric, modern)
+           FontMono    — DM Mono, monospace for numerics + labels
+           FontDisplay — Bebas Neue, condensed all-caps display for hero
+                         headlines and the LIMITLESS wordmark. -->
+    <FontFamily x:Key="FontUi">./Fonts/#DM Sans, Segoe UI Variable, Segoe UI</FontFamily>
+    <FontFamily x:Key="FontMono">./Fonts/#DM Mono, Cascadia Mono, Consolas</FontFamily>
+    <FontFamily x:Key="FontDisplay">./Fonts/#Bebas Neue, Impact, Arial Black</FontFamily>
+
+</ResourceDictionary>

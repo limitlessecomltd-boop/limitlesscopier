@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>LTC.Server</RootNamespace>
+    <AssemblyName>LimitlessActivationServer</AssemblyName>
+    <Description>Limitless Trade Copier — Activation Server. Issues/heartbeats/revokes licenses for the customer app. Runs on a private Hetzner VPS behind Caddy.</Description>
+  </PropertyGroup>
+
+  <!--
+    NOTE: We deliberately do NOT reference LTC.Core here. LTC.Core targets
+    net8.0-windows because of the mtapi.mt5.dll dependency, and the server
+    is meant to run on Linux. Instead we COPY the small LTC.Core.Licensing
+    classes (ActivationToken, ActivationTokenCodec, FingerprintBundle) into
+    the server project. They're <200 lines of pure crypto with no Windows
+    dependencies — duplicating is cleaner than trying to multi-target Core.
+  -->
+
+  <ItemGroup>
+    <!-- Web framework -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.10">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+
+    <!-- Logging: Serilog with file rotation + console -->
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+
+    <!-- Crypto: same Ed25519 library as the desktop app -->
+    <PackageReference Include="NSec.Cryptography" Version="24.4.0" />
+  </ItemGroup>
+
+</Project>

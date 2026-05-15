@@ -1,0 +1,152 @@
+<?xml version='1.0'?>
+<!--
+============================================================================
+ Obfuscar configuration for Limitless Trade Copier (customer app).
+
+ Strategy: rename aggressively for everything WPF doesn't touch via
+ reflection, leave the WPF surface alone (data binding, theme dictionary
+ lookups, value converter resolution, etc. all rely on names staying
+ intact).
+
+ What gets obfuscated:
+   - LicenseService internals (validation algorithms, key handling)
+   - ActivationToken / FingerprintBundle internal logic
+   - Engine routing / matching / size calculation
+   - HardwareFingerprint reader internals
+   - Persistence layer (DPAPI calls, SQLite mapping)
+   - Embedded string literals (the public Ed25519 key, internal magic
+     numbers, error message templates that hint at the algorithm)
+
+ What stays in clear text (by necessity):
+   - Public classes/methods of LTC.Core that LTC.App invokes
+   - Anything inheriting from Window / UserControl / Application
+   - Anything implementing INotifyPropertyChanged (the property names
+     are the binding contract)
+   - x:Class types and value converters referenced from XAML
+   - The Application entry point and its [STAThread] Main
+
+ Output: obfuscated copies of LTC.App.dll, LTC.Core.dll, LTC.Persistence.dll
+ land in obfuscation\Output\. The rest of the publish folder (mtapi.mt5.dll,
+ .NET runtime DLLs, NuGet package DLLs) is left untouched and gets copied
+ alongside by the build script.
+============================================================================
+-->
+<Obfuscator>
+
+  <!-- ====================================================================
+       PATHS - all relative to obfuscation\ (where this file lives)
+       The PowerShell wrapper sets InPath to wherever LTC.App was just
+       published, so these defaults rarely get used directly.
+       ==================================================================== -->
+  <Var name="InPath" value="..\LTC.App\bin\Release\net8.0-windows\win-x64\publish" />
+  <Var name="OutPath" value=".\Output" />
+
+  <!-- ====================================================================
+       GLOBAL SETTINGS
+       ==================================================================== -->
+
+  <!-- Suppress ildasm. Adds [SuppressIldasmAttribute]; tells well-behaved
+       decompilers to refuse to open the binary. Determined attackers
+       bypass this trivially with dnSpy, but it filters out casual lookers. -->
+  <Var name="SuppressIldasm" value="true" />
+
+  <!-- Encrypt embedded string literals. Strings like the embedded Ed25519
+       public key, error message templates, and config keys get encoded
+       at build time and decoded at runtime. Grepping the DLL for
+       "KILODO..." no longer finds the key. -->
+  <Var name="HideStrings" value="true" />
+
+  <!-- Mark types/members with [Obfuscation] attributes so decompilers
+       know not to attempt name recovery from typical heuristics. -->
+  <Var name="MarkedOnly" value="false" />
+
+  <!-- Rename method overloads to use the same name (less info leaked
+       about ordering / number of overloads). -->
+  <Var name="ReuseNames" value="true" />
+
+  <!-- Keep public properties intact (CRITICAL for WPF data binding).
+       Even private fields that back public properties get renamed —
+       just the public surface stays. -->
+  <Var name="KeepPublicApi" value="true" />
+
+  <!-- Hide internal types/members from the visible API entirely.
+       This is what makes a dnSpy view of a confused binary show
+       "a", "b", "c" instead of "LicenseValidator", "TokenSigner". -->
+  <Var name="HidePrivateApi" value="true" />
+
+  <!-- Don't rename if a XAML resource references the type by string.
+       Belt-and-braces — our exclusion patterns below already handle
+       this, but this catches things our patterns might miss. -->
+  <Var name="RenameProperties" value="false" />
+  <Var name="RenameEvents" value="false" />
+
+  <!-- Use a wider character set for renamed identifiers. Default is
+       single letters; this gives longer, less guessable names. -->
+  <Var name="UseUnicodeNames" value="false" />
+
+  <Var name="LogFile" value=".\Output\obfuscation-log.xml" />
+
+  <!-- ====================================================================
+       INPUT MODULES
+       ==================================================================== -->
+
+  <Module file="$(InPath)\LimitlessTradeCopier.dll">
+
+    <!-- Don't rename the program entry point. -->
+    <SkipType name="LTC.App.App" skipMethods="true" skipFields="true" skipProperties="true" skipEvents="true" />
+
+    <!-- Every Window/UserControl/Page subclass is referenced by name
+         from XAML (x:Class), so all of them must stay public+unrenamed.
+         Their internal helper methods can still be renamed. -->
+    <SkipType name="LTC.App.Views.*" skipMethods="false" skipFields="false" skipProperties="true" skipEvents="true" />
+    <SkipType name="LTC.App.Views.Tabs.*" skipMethods="false" skipFields="false" skipProperties="true" skipEvents="true" />
+
+    <!-- ViewModels — property names are the data binding contract.
+         The CLASSES can keep their names (XAML may reference them);
+         private fields and helpers inside them get scrambled. -->
+    <SkipType name="LTC.App.ViewModels.*" skipProperties="true" skipEvents="true" />
+
+    <!-- Value converters are looked up by string from XAML resources.
+         Class name must stay. -->
+    <SkipType name="LTC.App.Converters.*" skipProperties="true" skipEvents="true" />
+
+    <!-- Models bound to XAML — properties bound from views must keep
+         their names. -->
+    <SkipType name="LTC.App.Models.*" skipProperties="true" skipEvents="true" />
+
+    <!-- DON'T rename the LicenseDialog, AddAccountDialog, etc. handler
+         methods — they're referenced by name from XAML Click="..." etc.
+         The SkipType above already covers Views.* methods. -->
+
+  </Module>
+
+  <Module file="$(InPath)\LTC.Core.dll">
+
+    <!-- LTC.Core is the licensing brain. Its PUBLIC types are called
+         from LTC.App and renamed-by-tooling there. Keep public surface
+         renamable so attackers can't just diff against the original
+         names — Obfuscar will keep the public API but rename internals.
+
+         IMPORTANT: don't break the public/private boundary mapping. -->
+
+    <!-- LicenseService class name MUST stay (referenced from LTC.App). -->
+    <SkipType name="LTC.Core.Licensing.LicenseService" skipMethods="false" />
+    <SkipType name="LTC.Core.Licensing.LicenseInfo" skipProperties="true" />
+    <SkipType name="LTC.Core.Licensing.ActivationToken" skipProperties="true" />
+    <SkipType name="LTC.Core.Licensing.ActivationTokenCodec" skipMethods="false" />
+    <SkipType name="LTC.Core.Licensing.FingerprintBundle" skipProperties="true" />
+
+    <!-- Engine + Risk public types — called from the app. -->
+    <SkipType name="LTC.Core.Engine.*" skipMethods="false" />
+    <SkipType name="LTC.Core.Risk.*" skipMethods="false" />
+    <SkipType name="LTC.Core.Models.*" skipProperties="true" />
+
+  </Module>
+
+  <Module file="$(InPath)\LTC.Persistence.dll">
+    <!-- DbContext/repository methods called by the app — keep public
+         surface visible, scramble the internals. -->
+    <SkipNamespace name="LTC.Persistence.Migrations" />
+  </Module>
+
+</Obfuscator>

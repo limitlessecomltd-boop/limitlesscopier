@@ -1,0 +1,1070 @@
+<Window x:Class="LTC.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:vm="clr-namespace:LTC.App.ViewModels"
+        mc:Ignorable="d"
+        Title="Limitless Trade Copier"
+        Icon="/Assets/ltc-icon.ico"
+        Height="780" Width="1380"
+        MinHeight="600" MinWidth="1120"
+        Background="{DynamicResource BgBaseBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        FontFamily="{StaticResource FontUi}"
+        FontSize="11"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        WindowStartupLocation="CenterScreen"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+
+    <Window.Resources>
+        <!-- ================================================================ -->
+        <!-- Account row template — used in both Masters and Slaves lists      -->
+        <!-- ================================================================ -->
+        <DataTemplate x:Key="AccountRowTemplate" DataType="{x:Type vm:AccountViewModel}">
+            <!-- Card-style account row. Layout matches the Trader Cockpit mockup:
+                 1) Header strip: status dot, display name, account ID right-aligned
+                 2) 2x2 grid of stat tiles: BAL / EQUITY / P&L / M.LVL — each tile
+                    shows a tiny mono caps label above a mono value, both aligned
+                    to the same baseline for a "data sheet" feel
+                 3) Action row: Symbols button + Close-all button, equal width
+
+                 The card is bordered on its left edge by a 2px accent strip
+                 (cyan for masters, amber for slaves). This makes role visible
+                 at a glance without needing role badges or background tints. -->
+            <Border CornerRadius="3" Padding="0" Margin="0,0,0,8"
+                    Background="{DynamicResource BgPanelBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="1">
+                <Border.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Edit account"
+                                  Tag="{Binding}"
+                                  Click="OnEditAccountClick" />
+                        <MenuItem Header="View symbols"
+                                  Tag="{Binding}"
+                                  Click="OnViewSymbolsClick" />
+                        <Separator />
+                        <MenuItem Header="Delete account"
+                                  Foreground="{DynamicResource StatusErrBrush}"
+                                  Tag="{Binding}"
+                                  Click="OnDeleteAccountClick" />
+                    </ContextMenu>
+                </Border.ContextMenu>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3" />     <!-- Role accent strip -->
+                        <ColumnDefinition Width="*" />     <!-- Card content -->
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Role accent strip: cyan for master, amber for slave.
+                         A 3px solid stripe down the left edge — readable at a
+                         glance even when 5+ accounts are stacked. -->
+                    <Border Grid.Column="0">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSlave}" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                    </Border>
+
+                    <!-- Card content -->
+                    <StackPanel Grid.Column="1" Margin="12,11,12,11">
+
+                        <!-- Header: status dot + name on the left, account ID on the right -->
+                        <Grid Margin="0,0,0,10">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                                <Ellipse Style="{StaticResource StatusDot}"
+                                         VerticalAlignment="Center"
+                                         Fill="{Binding StatusColorKey, Converter={StaticResource KeyToBrush}}" />
+                                <TextBlock Text="{Binding DisplayName}"
+                                           Style="{StaticResource TextAccountName}"
+                                           Margin="8,0,0,0"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding Login}"
+                                       FontFamily="{StaticResource FontMono}"
+                                       FontSize="10"
+                                       Foreground="{DynamicResource TextDimBrush}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right" />
+                        </Grid>
+
+                        <!-- Stat tiles: 2x2 grid. Labels are tiny mono caps; values
+                             are mono semibold. A subtle ColumnDefinition gap keeps
+                             the columns from kissing. Renders as "—" rows until
+                             the first stats poll arrives (HasStats triggers the
+                             value update via the VM's computed properties). -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="6" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                <TextBlock Text="BALANCE"
+                                           FontFamily="{StaticResource FontMono}"
+                                           FontSize="8" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextDimBrush}" />
+                                <TextBlock Text="{Binding BalanceText}"
+                                           FontFamily="{StaticResource FontMono}"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           Margin="0,1,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                <TextBlock Text="EQUITY"
+                                           FontFamily="{StaticResource FontMono}"
+                                           FontSize="8" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextDimBrush}" />
+                                <TextBlock Text="{Binding EquityText}"
+                                           FontFamily="{StaticResource FontMono}"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           Margin="0,1,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                <TextBlock Text="P&amp;L"
+                                           FontFamily="{StaticResource FontMono}"
+                                           FontSize="8" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextDimBrush}" />
+                                <TextBlock Text="{Binding FloatingProfitText}"
+                                           FontFamily="{StaticResource FontMono}"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{Binding FloatingProfitColorKey, Converter={StaticResource KeyToBrush}}"
+                                           Margin="0,1,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.Column="2">
+                                <TextBlock Text="M.LEVEL"
+                                           FontFamily="{StaticResource FontMono}"
+                                           FontSize="8" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextDimBrush}" />
+                                <TextBlock Text="{Binding MarginLevelText}"
+                                           FontFamily="{StaticResource FontMono}"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           Margin="0,1,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Action row: equal-width Symbols + Close all buttons -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0"
+                                    Style="{StaticResource GhostButton}"
+                                    Content="Symbols"
+                                    Padding="8,4" FontSize="10"
+                                    Tag="{Binding}"
+                                    Click="OnViewSymbolsClick" />
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource GhostButton}"
+                                    Content="Close all"
+                                    Padding="8,4" FontSize="10"
+                                    Foreground="{DynamicResource StatusErrBrush}"
+                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                    Tag="{Binding}"
+                                    Click="OnCloseAllOnAccountClick" />
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- ================================================================ -->
+        <!-- Activity row template                                             -->
+        <!-- ================================================================ -->
+        <DataTemplate x:Key="ActivityRowTemplate" DataType="{x:Type vm:ActivityEntryViewModel}">
+            <Border BorderBrush="{DynamicResource BorderFaintBrush}" BorderThickness="0,0,0,1">
+                <Border BorderBrush="{Binding KindColorKey, Converter={StaticResource KeyToBrush}}"
+                        BorderThickness="2,0,0,0"
+                        Padding="12,9">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,2">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding KindLabel}"
+                                           FontFamily="{StaticResource FontUi}" FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{Binding KindColorKey, Converter={StaticResource KeyToBrush}}" />
+                                <TextBlock Text="{Binding Symbol}"
+                                           FontFamily="{StaticResource FontMono}" FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           Margin="8,0,0,0"
+                                           Visibility="{Binding Symbol, Converter={StaticResource NotEmptyToVis}}" />
+                                <TextBlock Text="{Binding VolumeText}"
+                                           FontFamily="{StaticResource FontMono}" FontSize="11"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           Margin="8,0,0,0"
+                                           Visibility="{Binding ShowVolume, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="{Binding LatencyText}"
+                                           FontFamily="{StaticResource FontMono}" FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{Binding KindColorKey, Converter={StaticResource KeyToBrush}}"
+                                           Visibility="{Binding ShowLatency, Converter={StaticResource BoolToVis}}" />
+                                <Button Content="Retry" Style="{StaticResource DangerInlineButton}"
+                                        Margin="6,0,0,0"
+                                        Visibility="{Binding ShowRetry, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid>
+                            <TextBlock Text="{Binding DetailLine}" Style="{StaticResource TextSubMeta}" />
+                            <TextBlock Text="{Binding TimestampText}"
+                                       HorizontalAlignment="Right"
+                                       FontFamily="{StaticResource FontMono}" FontSize="10"
+                                       Foreground="{DynamicResource TextDimBrush}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Border>
+        </DataTemplate>
+
+        <!-- Shared template for one open-position row. Used by both the
+             Master positions and Slave positions sub-sections so changing
+             the row layout once updates both lists. -->
+        <DataTemplate x:Key="PositionRowTemplate" DataType="{x:Type vm:PositionViewModel}">
+            <Border BorderBrush="{DynamicResource BorderFaintBrush}"
+                    BorderThickness="0,0,0,1" Padding="18,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="55" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="55" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding SideText}"
+                               FontFamily="{StaticResource FontUi}"
+                               FontSize="10" FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               Foreground="{Binding SideColorKey, Converter={StaticResource KeyToBrush}}" />
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Symbol}"
+                                   FontFamily="{StaticResource FontMono}" FontSize="12"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="{Binding Ticket, StringFormat='#{0}'}"
+                                   FontFamily="{StaticResource FontMono}" FontSize="9"
+                                   Foreground="{DynamicResource TextDimBrush}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding Volume, StringFormat=\{0:0.##\}}"
+                               FontFamily="{StaticResource FontMono}" FontSize="11"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+
+                    <Grid Grid.Column="3" VerticalAlignment="Center" Margin="6,0,12,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <TextBlock Text="Open " FontSize="10"
+                                       Foreground="{DynamicResource TextDimBrush}" />
+                            <TextBlock Text="{Binding OpenPrice, StringFormat=\{0:0.#####\}}"
+                                       FontFamily="{StaticResource FontMono}" FontSize="10"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                            <TextBlock Text="   Cur " FontSize="10"
+                                       Foreground="{DynamicResource TextDimBrush}" />
+                            <TextBlock Text="{Binding CurrentPrice, StringFormat=\{0:0.#####\}}"
+                                       FontFamily="{StaticResource FontMono}" FontSize="10"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="1"
+                                   Text="{Binding ProfitText}"
+                                   FontFamily="{StaticResource FontMono}" FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{Binding ProfitColorKey, Converter={StaticResource KeyToBrush}}" />
+                    </Grid>
+
+                    <Button Grid.Column="4"
+                            Style="{StaticResource GhostButton}"
+                            Content="Close"
+                            Padding="10,3"
+                            FontSize="10"
+                            Foreground="{DynamicResource StatusErrBrush}"
+                            Tag="{Binding}"
+                            Click="OnClosePositionClick" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="52" />   <!-- Top bar with branding + global controls -->
+            <RowDefinition Height="76" />   <!-- Hero stats strip (equity, P&L, latency, win rate) -->
+            <RowDefinition Height="*" />    <!-- Body: 3-column workspace -->
+            <RowDefinition Height="32" />   <!-- Status bar -->
+        </Grid.RowDefinitions>
+
+        <!-- =========================================================== -->
+        <!-- TOP BAR                                                      -->
+        <!-- =========================================================== -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource BgVoidBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1">
+            <Grid Margin="16,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Brand mark: two overlapping circles — green (master/buy)
+                         on the left, red (slave/sell) on the right, with an amber
+                         "vesica piscis" lens where they meet. Visual metaphor for
+                         the trade-copy event: master fires, slave catches, magic
+                         happens in the overlap. Uses theme brushes so it auto-
+                         retints when light/dark swaps. Small (32x18) for the bar. -->
+                    <Grid Width="32" Height="18" VerticalAlignment="Center">
+                        <Ellipse Width="14" Height="14"
+                                 Fill="{DynamicResource StatusOkBrush}"
+                                 HorizontalAlignment="Left"
+                                 VerticalAlignment="Center"
+                                 Opacity="0.95" />
+                        <Ellipse Width="14" Height="14"
+                                 Fill="{DynamicResource StatusErrBrush}"
+                                 HorizontalAlignment="Right"
+                                 VerticalAlignment="Center"
+                                 Opacity="0.95" />
+                        <!-- Amber lens at the intersection. The Path data describes
+                             a vesica formed by two arc commands; sized to fit two
+                             14px circles whose centers are 14px apart in our box. -->
+                        <Path Fill="{DynamicResource BrandBrush}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Data="M 16,4 A 7,7 0 0 1 16,18 A 7,7 0 0 1 16,4 Z"
+                              Stretch="None" />
+                    </Grid>
+
+                    <!-- Wordmark: stacked. LIMITLESS in Bebas Neue display
+                         caps (matches the MFT design language); TRADE COPIER
+                         as a tracked-out DM Mono tagline below in brand color. -->
+                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="LIMITLESS"
+                                   FontFamily="{StaticResource FontDisplay}"
+                                   FontSize="22"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   LineHeight="20"
+                                   LineStackingStrategy="BlockLineHeight" />
+                        <!-- DM Mono in caps + tracked spacing; the literal
+                             spaces in the string are how we get visible
+                             letter-tracking without WPF's quirky Typography
+                             properties (which don't honor CSS-style
+                             letter-spacing reliably across builds). -->
+                        <TextBlock Text="T R A D E   C O P I E R"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="9"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource BrandBrush}"
+                                   Margin="0,1,0,0" />
+                    </StackPanel>
+                    <Border Margin="10,0,0,0" Padding="10,0,0,0"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                            BorderThickness="1,0,0,0">
+                        <TextBlock Text="v1.0.0"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource TextFaintBrush}"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <Border Margin="14,0,0,0" Padding="9,3"
+                            Background="{DynamicResource OkTintBrush}"
+                            BorderBrush="{DynamicResource StatusOkBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Opacity="0.95">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Style="{StaticResource StatusDotPulsing}" Fill="{DynamicResource StatusOkBrush}" />
+                            <TextBlock Text="{Binding EngineStatusText}"
+                                       FontFamily="{StaticResource FontUi}"
+                                       FontSize="10"
+                                       FontWeight="SemiBold"
+                                       Foreground="{Binding EngineStatusColorKey, Converter={StaticResource KeyToBrush}}"
+                                       VerticalAlignment="Center"
+                                       Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center">
+                    <Button Style="{StaticResource GhostButton}" Content="Close all" Margin="0,0,6,0"
+                            Foreground="{DynamicResource StatusErrBrush}"
+                            ToolTip="Close every open position on every connected account"
+                            Click="OnCloseAllEverywhereClick" />
+                    <!-- Logs button toggles the BOTTOM panel between Activity (default)
+                         and Logs. Positions stays put on top. The button label flips so
+                         users always see the action they'd take next. -->
+                    <Button Style="{StaticResource GhostButton}" Margin="0,0,6,0"
+                            Click="OnLogsClick">
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="Logs" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding RightPaneIsLogs}" Value="True">
+                                            <Setter Property="Text" Value="Activity" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Button>
+                    <!-- Theme toggle: a single round-ish glyph that flips the palette
+                         between Trader Cockpit (dark) and Swiss Minimal (light).
+                         The half-moon character reads in both themes. -->
+                    <Button Style="{StaticResource GhostButton}" Content="◐" Margin="0,0,6,0"
+                            ToolTip="Toggle dark / light theme"
+                            Click="OnThemeToggleClick" />
+                    <Button Style="{StaticResource GhostButton}" Content="Settings" Margin="0,0,6,0"
+                            Click="OnSettingsClick" />
+                    <Button Style="{StaticResource PrimaryButton}" Content="+ Add account"
+                            Click="OnAddAccountClick" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- =========================================================== -->
+        <!-- HERO STATS STRIP                                            -->
+        <!-- 4 columns: Total equity (with sparkline) | Floating P&L |   -->
+        <!-- Copy latency p99 | Win rate (with progress bar). Each cell  -->
+        <!-- has hard 1px column dividers so it reads as a terminal      -->
+        <!-- gauge cluster, not a soft dashboard.                        -->
+        <!-- =========================================================== -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource BgVoidBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.6*" />     <!-- Equity gets more room for sparkline -->
+                    <ColumnDefinition Width="1*" />
+                    <ColumnDefinition Width="1*" />
+                    <ColumnDefinition Width="1*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Cell 1: Total equity + mini sparkline -->
+                <Border Grid.Column="0" Padding="20,12"
+                        BorderBrush="{DynamicResource BorderFaintBrush}" BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Text="TOTAL EQUITY"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="9" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextDimBrush}" />
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0">
+                            <TextBlock Text="{Binding TotalEquityText}"
+                                       FontFamily="{StaticResource FontMono}"
+                                       FontSize="20" FontWeight="Bold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                            <TextBlock Text="{Binding TotalEquityChangeText}"
+                                       FontFamily="{StaticResource FontUi}"
+                                       FontSize="11" FontWeight="Medium"
+                                       VerticalAlignment="Center"
+                                       Margin="10,0,0,0"
+                                       Foreground="{Binding TotalEquityChangeColorKey, Converter={StaticResource KeyToBrush}}" />
+                        </StackPanel>
+                        <!-- Static sparkline placeholder. The shape suggests an upward
+                             equity curve; replacing this with live data is a follow-up
+                             once we keep an in-memory history of equity samples. -->
+                        <Polyline Grid.Row="2"
+                                  Margin="0,4,0,0"
+                                  Points="0,18 16,15 32,17 48,13 64,14 80,11 96,12 112,8 128,10 144,6 160,8 176,5 192,7 208,3 224,5 240,2"
+                                  Stroke="{DynamicResource StatusOkBrush}"
+                                  StrokeThickness="1.2"
+                                  StrokeLineJoin="Round"
+                                  VerticalAlignment="Bottom" />
+                    </Grid>
+                </Border>
+
+                <!-- Cell 2: Floating P&L -->
+                <Border Grid.Column="1" Padding="20,12"
+                        BorderBrush="{DynamicResource BorderFaintBrush}" BorderThickness="0,0,1,0">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="FLOATING P&amp;L"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="9" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextDimBrush}" />
+                        <TextBlock Text="{Binding FloatingPnlText}"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="22" FontWeight="Bold"
+                                   Margin="0,2,0,0"
+                                   Foreground="{Binding FloatingPnlColorKey, Converter={StaticResource KeyToBrush}}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Cell 3: Copy latency -->
+                <Border Grid.Column="2" Padding="20,12"
+                        BorderBrush="{DynamicResource BorderFaintBrush}" BorderThickness="0,0,1,0">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="COPY LATENCY"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="9" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextDimBrush}" />
+                        <TextBlock Text="{Binding LatencyText}"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="22" FontWeight="Bold"
+                                   Margin="0,2,0,0"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Cell 4: Win rate + progress bar -->
+                <Border Grid.Column="3" Padding="20,12">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Text="COPY SUCCESS"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="9" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextDimBrush}" />
+                        <TextBlock Grid.Row="1"
+                                   Text="{Binding WinRateText}"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="22" FontWeight="Bold"
+                                   Margin="0,2,0,0"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <!-- Progress bar: 100px-wide fixed track so binding the
+                             fill's Width directly to WinRatePercent (0..100) works
+                             without a converter. -->
+                        <Grid Grid.Row="2" VerticalAlignment="Bottom" Margin="0,8,0,0"
+                              Height="3" Width="100" HorizontalAlignment="Left">
+                            <Border Background="{DynamicResource BorderSubtleBrush}" />
+                            <Border HorizontalAlignment="Left"
+                                    Background="{DynamicResource StatusOkBrush}"
+                                    Width="{Binding WinRatePercent}" />
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- =========================================================== -->
+        <!-- MAIN 2-PANE                                                 -->
+        <!-- Left rail: accounts list + copy map (vertically stacked).   -->
+        <!-- Right rail: positions on top, activity tape underneath.     -->
+        <!-- This packs more info in fewer columns and avoids the empty- -->
+        <!-- looking center pane on a fresh install with no trades yet.  -->
+        <!-- =========================================================== -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320" MinWidth="280" />
+                <ColumnDefinition Width="*" MinWidth="500" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ===== LEFT: ACCOUNTS ===== -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource BgBaseBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="0,0,1,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="16,14,16,8">
+                        <TextBlock Text="Accounts" Style="{StaticResource TextSectionHeader}" />
+                        <TextBlock HorizontalAlignment="Right"
+                                   FontFamily="{StaticResource FontMono}" FontSize="11"
+                                   Foreground="{DynamicResource TextFaintBrush}">
+                            <Run Text="{Binding Masters.Count, Mode=OneWay}" />
+                            <Run Text="·" />
+                            <Run Text="{Binding Slaves.Count, Mode=OneWay}" />
+                        </TextBlock>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="10,4,10,12">
+
+                            <!-- MASTERS -->
+                            <StackPanel Orientation="Horizontal" Margin="6,6,6,8">
+                                <Rectangle Width="3" Height="10" Fill="{DynamicResource MasterBrush}" RadiusX="1" RadiusY="1" />
+                                <TextBlock Text="MASTERS" Style="{StaticResource TextGroupLabel}"
+                                           Foreground="{DynamicResource MasterBrush}" Margin="6,0,0,0" />
+                                <TextBlock Text="{Binding Masters.Count}"
+                                           FontFamily="{StaticResource FontMono}" FontSize="10"
+                                           Foreground="{DynamicResource TextFaintBrush}"
+                                           Margin="6,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Masters}"
+                                          ItemTemplate="{StaticResource AccountRowTemplate}" />
+
+                            <!-- SLAVES -->
+                            <StackPanel Orientation="Horizontal" Margin="6,10,6,8">
+                                <Rectangle Width="3" Height="10" Fill="{DynamicResource SlaveBrush}" RadiusX="1" RadiusY="1" />
+                                <TextBlock Text="SLAVES" Style="{StaticResource TextGroupLabel}"
+                                           Foreground="{DynamicResource SlaveBrush}" Margin="6,0,0,0" />
+                                <TextBlock Text="{Binding Slaves.Count}"
+                                           FontFamily="{StaticResource FontMono}" FontSize="10"
+                                           Foreground="{DynamicResource TextFaintBrush}"
+                                           Margin="6,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Slaves}"
+                                          ItemTemplate="{StaticResource AccountRowTemplate}" />
+
+                            <!-- Empty state hint -->
+                            <Border Padding="11,16" Margin="0,8,0,0"
+                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Visibility="{Binding HasAnyAccount, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
+                                <StackPanel>
+                                    <TextBlock Text="No accounts yet"
+                                               FontFamily="{StaticResource FontUi}" FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextStrongBrush}"
+                                               Margin="0,0,0,4" />
+                                    <TextBlock Text="Click + Add account to register a master or slave."
+                                               Style="{StaticResource TextBody}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- ============================================
+                                 COPY MAP (moved here from the old center pane).
+                                 Sits below the accounts list in the same scrollable
+                                 rail; this gives the user one continuous workspace
+                                 for everything they configure (accounts on top,
+                                 the routing between them right below).
+                                 ============================================ -->
+                            <Grid Margin="6,18,6,8">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="COPY MAP" Style="{StaticResource TextGroupLabel}"
+                                               Foreground="{DynamicResource BrandBrush}" />
+                                    <TextBlock Text="{Binding Links.Count}"
+                                               FontFamily="{StaticResource FontMono}" FontSize="10"
+                                               Foreground="{DynamicResource TextFaintBrush}"
+                                               Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Button HorizontalAlignment="Right"
+                                        Style="{StaticResource MasterAccentButton}"
+                                        Content="+ Link" Padding="9,3" FontSize="10"
+                                        Click="OnAddLinkClick" />
+                            </Grid>
+
+                            <!-- Empty state for copy links -->
+                            <Border Padding="11,12" Margin="0,0,0,0"
+                                    Background="{DynamicResource BgPanelBrush}"
+                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    Visibility="{Binding HasLinks, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
+                                <StackPanel>
+                                    <TextBlock Text="No copy links yet"
+                                               FontFamily="{StaticResource FontUi}" FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextStrongBrush}"
+                                               Margin="0,0,0,3" />
+                                    <TextBlock Text="Add at least one master and one slave, then click + Link."
+                                               Style="{StaticResource TextBody}"
+                                               FontSize="10"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Copy link rows -->
+                            <ItemsControl ItemsSource="{Binding Links}"
+                                          Visibility="{Binding HasLinks, Converter={StaticResource BoolToVis}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:CopyLinkViewModel}">
+                                        <Border Background="{DynamicResource BgPanelBrush}"
+                                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="3"
+                                                Padding="11,9"
+                                                Margin="0,0,0,6">
+                                            <Border.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Edit link"
+                                                              Tag="{Binding}"
+                                                              Click="OnEditLinkClick" />
+                                                    <Separator />
+                                                    <MenuItem Header="Delete link"
+                                                              Foreground="{DynamicResource StatusErrBrush}"
+                                                              Tag="{Binding}"
+                                                              Click="OnDeleteLinkClick" />
+                                                </ContextMenu>
+                                            </Border.ContextMenu>
+                                            <StackPanel>
+                                                <Grid>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding MasterName}"
+                                                                   FontFamily="{StaticResource FontUi}" FontSize="11"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource AccentBrush}"
+                                                                   VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxWidth="100" />
+                                                        <TextBlock Text="→"
+                                                                   FontFamily="{StaticResource FontMono}" FontSize="11"
+                                                                   Foreground="{DynamicResource TextFaintBrush}"
+                                                                   Margin="6,0,6,0"
+                                                                   VerticalAlignment="Center" />
+                                                        <TextBlock Text="{Binding SlaveName}"
+                                                                   FontFamily="{StaticResource FontUi}" FontSize="11"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource BrandBrush}"
+                                                                   VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxWidth="100" />
+                                                    </StackPanel>
+                                                    <TextBlock HorizontalAlignment="Right"
+                                                               Text="{Binding LotSizingSummary}"
+                                                               FontFamily="{StaticResource FontMono}" FontSize="10"
+                                                               Foreground="{DynamicResource TextStrongBrush}"
+                                                               VerticalAlignment="Center" />
+                                                </Grid>
+                                                <TextBlock Text="{Binding CountersText}"
+                                                           FontFamily="{StaticResource FontUi}" FontSize="9"
+                                                           Foreground="{Binding CountersColorKey, Converter={StaticResource KeyToBrush}}"
+                                                           Margin="0,4,0,0" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- =====================================================
+                 RIGHT PANE: positions on top, activity on bottom.
+                 Both visible simultaneously — no more 3-way toggle.
+                 The "Logs" button on the top bar swaps the bottom half
+                 between Activity and Logs (RightPaneIsLogs flips it);
+                 Positions stays put on top.
+                 ===================================================== -->
+            <Grid Grid.Column="1" Background="{DynamicResource BgDeepBrush}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />     <!-- Open positions -->
+                    <RowDefinition Height="*" />     <!-- Activity / Logs -->
+                </Grid.RowDefinitions>
+
+                <!-- ====== TOP: OPEN POSITIONS ====== -->
+                <Border Grid.Row="0"
+                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                        BorderThickness="1,0,0,1">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="18,14,18,10">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="OPEN POSITIONS" Style="{StaticResource TextGroupLabel}"
+                                           Foreground="{DynamicResource BrandBrush}" />
+                                <TextBlock FontFamily="{StaticResource FontUi}" FontSize="11"
+                                           Foreground="{DynamicResource TextDimBrush}"
+                                           Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <Run Text="{Binding Positions.Count, Mode=OneWay}" />
+                                    <Run Text="active" />
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Ellipse Style="{StaticResource StatusDotPulsing}" Fill="{DynamicResource StatusOkBrush}" />
+                                <TextBlock Text="Live"
+                                           FontFamily="{StaticResource FontUi}" FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource StatusOkBrush}"
+                                           Margin="6,0,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <Grid>
+                                <!-- Empty state -->
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Margin="20,30,20,40"
+                                            Visibility="{Binding Positions.Count, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
+                                    <TextBlock Text="○"
+                                               FontSize="32"
+                                               Foreground="{DynamicResource TextFaintBrush}"
+                                               HorizontalAlignment="Center"
+                                               Opacity="0.5" />
+                                    <TextBlock Text="No open positions"
+                                               FontFamily="{StaticResource FontUi}" FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextStrongBrush}"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,8,0,4" />
+                                    <TextBlock Text="Trades opened on any connected account will appear here in real time."
+                                               Style="{StaticResource TextBody}" FontSize="10"
+                                               TextWrapping="Wrap" TextAlignment="Center"
+                                               MaxWidth="280" />
+                                </StackPanel>
+
+                                <!-- Two sub-sections: Master positions (top) and
+                                     Slave positions (bottom). Each one hides itself
+                                     when its own list is empty so the panel doesn't
+                                     show "MASTER POSITIONS  0" with no rows beneath.
+                                     The shared empty state above only shows when
+                                     BOTH lists are empty (canonical Positions.Count==0). -->
+                                <StackPanel Visibility="{Binding Positions.Count, Converter={StaticResource BoolToVis}}">
+
+                                    <!-- ===== MASTER POSITIONS sub-section ===== -->
+                                    <StackPanel Visibility="{Binding MasterPositions.Count, Converter={StaticResource BoolToVis}}">
+                                        <Grid Margin="18,12,18,6">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Rectangle Width="3" Height="10"
+                                                           Fill="{DynamicResource AccentBrush}"
+                                                           RadiusX="1" RadiusY="1" />
+                                                <TextBlock Text="MASTER POSITIONS"
+                                                           Style="{StaticResource TextGroupLabel}"
+                                                           Foreground="{DynamicResource AccentBrush}"
+                                                           Margin="6,0,0,0" />
+                                                <TextBlock FontFamily="{StaticResource FontMono}" FontSize="10"
+                                                           Foreground="{DynamicResource TextFaintBrush}"
+                                                           Margin="8,0,0,0" VerticalAlignment="Center"
+                                                           Text="{Binding MasterPositions.Count, Mode=OneWay}" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding MasterPositions}"
+                                                      ItemTemplate="{StaticResource PositionRowTemplate}" />
+                                    </StackPanel>
+
+                                    <!-- ===== SLAVE POSITIONS sub-section ===== -->
+                                    <StackPanel Visibility="{Binding SlavePositions.Count, Converter={StaticResource BoolToVis}}"
+                                                Margin="0,8,0,0">
+                                        <Grid Margin="18,12,18,6">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Rectangle Width="3" Height="10"
+                                                           Fill="{DynamicResource BrandBrush}"
+                                                           RadiusX="1" RadiusY="1" />
+                                                <TextBlock Text="SLAVE POSITIONS"
+                                                           Style="{StaticResource TextGroupLabel}"
+                                                           Foreground="{DynamicResource BrandBrush}"
+                                                           Margin="6,0,0,0" />
+                                                <TextBlock FontFamily="{StaticResource FontMono}" FontSize="10"
+                                                           Foreground="{DynamicResource TextFaintBrush}"
+                                                           Margin="8,0,0,0" VerticalAlignment="Center"
+                                                           Text="{Binding SlavePositions.Count, Mode=OneWay}" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding SlavePositions}"
+                                                      ItemTemplate="{StaticResource PositionRowTemplate}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- ====== BOTTOM: ACTIVITY (default) ====== -->
+                <Border Grid.Row="1"
+                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                        BorderThickness="1,0,0,0"
+                        Visibility="{Binding RightPaneIsLogs, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="18,14,18,10">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="ACTIVITY" Style="{StaticResource TextGroupLabel}"
+                                           Foreground="{DynamicResource BrandBrush}" />
+                                <TextBlock FontFamily="{StaticResource FontUi}" FontSize="11"
+                                           Foreground="{DynamicResource TextDimBrush}"
+                                           Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <Run Text="{Binding Activity.Count, Mode=OneWay}" />
+                                    <Run Text="events" />
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Ellipse Style="{StaticResource StatusDotPulsing}" Fill="{DynamicResource StatusOkBrush}" />
+                                <TextBlock Text="Live"
+                                           FontFamily="{StaticResource FontUi}" FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource StatusOkBrush}"
+                                           Margin="6,0,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <Grid>
+                                <!-- Empty state -->
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Margin="20,30,20,40"
+                                            Visibility="{Binding HasActivity, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
+                                    <TextBlock Text="∼"
+                                               FontSize="32"
+                                               Foreground="{DynamicResource TextFaintBrush}"
+                                               HorizontalAlignment="Center"
+                                               Opacity="0.5" />
+                                    <TextBlock Text="Waiting for trade events"
+                                               FontFamily="{StaticResource FontUi}" FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextStrongBrush}"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,8,0,4" />
+                                    <TextBlock Text="Each copy fires here with latency, status, and any error."
+                                               Style="{StaticResource TextBody}" FontSize="10"
+                                               TextWrapping="Wrap" TextAlignment="Center"
+                                               MaxWidth="280" />
+                                </StackPanel>
+
+                                <ItemsControl ItemsSource="{Binding Activity}"
+                                              ItemTemplate="{StaticResource ActivityRowTemplate}" />
+                            </Grid>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- ====== BOTTOM: LOGS (when "Logs" tab is active) ====== -->
+                <Border Grid.Row="1"
+                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                        BorderThickness="1,0,0,0"
+                        Visibility="{Binding RightPaneIsLogs, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="18,14,18,10">
+                            <TextBlock Text="LOGS" Style="{StaticResource TextGroupLabel}"
+                                       Foreground="{DynamicResource BrandBrush}" />
+                            <Button HorizontalAlignment="Right"
+                                    Style="{StaticResource GhostButton}"
+                                    Content="Clear"
+                                    Padding="9,3" FontSize="10"
+                                    Click="OnClearLogsClick" />
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Logs}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:PlainLogEntryViewModel}">
+                                        <Border BorderBrush="{DynamicResource BorderFaintBrush}"
+                                                BorderThickness="0,0,0,1" Padding="18,7">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="60" />
+                                                    <ColumnDefinition Width="50" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding TimestampText}"
+                                                           FontFamily="{StaticResource FontMono}" FontSize="10"
+                                                           Foreground="{DynamicResource TextDimBrush}"
+                                                           VerticalAlignment="Top" />
+                                                <TextBlock Grid.Column="1" Text="{Binding LevelLabel}"
+                                                           FontFamily="{StaticResource FontUi}" FontSize="9"
+                                                           FontWeight="Bold"
+                                                           Foreground="{Binding LevelColorKey, Converter={StaticResource KeyToBrush}}"
+                                                           VerticalAlignment="Top" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Message}"
+                                                           FontFamily="{StaticResource FontUi}" FontSize="11"
+                                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                                           TextWrapping="Wrap" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </Grid>
+
+        </Grid>
+
+        <!-- =========================================================== -->
+        <!-- STATUS BAR                                                   -->
+        <!-- =========================================================== -->
+        <Border Grid.Row="3"
+                Background="{DynamicResource BgVoidBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,1,0,0">
+            <Grid Margin="16,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                        <TextBlock Text="Latency" Style="{StaticResource TextStatusLabel}" />
+                        <TextBlock Text="{Binding LatencyText}"
+                                   FontFamily="{StaticResource FontMono}" FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource StatusOkBrush}"
+                                   Margin="6,0,0,0" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                        <TextBlock Text="Today" Style="{StaticResource TextStatusLabel}" />
+                        <TextBlock Style="{StaticResource TextStatusValue}" Margin="6,0,0,0">
+                            <Run Text="{Binding TodayTradesText, Mode=OneWay}" />
+                            <Run Text="trades" />
+                        </TextBlock>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                        <TextBlock Text="Success" Style="{StaticResource TextStatusLabel}" />
+                        <TextBlock Text="{Binding SuccessRateText}" Style="{StaticResource TextStatusValue}" Margin="6,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="P&amp;L" Style="{StaticResource TextStatusLabel}" />
+                        <TextBlock Text="{Binding TotalPnlText}"
+                                   FontFamily="{StaticResource FontMono}" FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{Binding TotalPnlColorKey, Converter={StaticResource KeyToBrush}}"
+                                   Margin="6,0,0,0" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                        <TextBlock Text="CPU" Style="{StaticResource TextStatusLabel}" />
+                        <TextBlock Text="{Binding CpuText}" Style="{StaticResource TextStatusValue}" Margin="6,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                        <TextBlock Text="RAM" Style="{StaticResource TextStatusLabel}" />
+                        <TextBlock Text="{Binding RamText}" Style="{StaticResource TextStatusValue}" Margin="6,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Up" Style="{StaticResource TextStatusLabel}" />
+                        <TextBlock Text="{Binding UptimeText}" Style="{StaticResource TextStatusValue}" Margin="6,0,0,0" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,47 @@
+LIMITLESS TRADE COPIER — ADMIN APP
+
+OPERATOR-ONLY SOFTWARE — INTERNAL USE
+
+================================================================
+DO NOT DISTRIBUTE THIS APPLICATION TO CUSTOMERS.
+================================================================
+
+This application is intended for use by Limitless Trade Copier
+operators only. It is used to issue license activation files for
+the customer-facing Limitless Trade Copier application.
+
+You may install this application only if you are an authorized
+operator of Limitless Trade Copier.
+
+By installing, you confirm:
+
+  1. You are an authorized operator and have been provided the
+     Ed25519 private key needed to sign licenses.
+
+  2. You will keep the private key file (keygen-private.key)
+     secure on your machine. Do not commit it to source control.
+     Do not place it in shared folders. Do not email it.
+
+  3. You will not redistribute this admin application to
+     end customers.
+
+  4. You understand that if the private key is leaked, every
+     active customer license will need to be re-issued under a
+     new keypair, and all previously issued licenses will become
+     invalid.
+
+  5. You are using this software on a personal machine under
+     your control. Do not install on shared or public computers.
+
+================================================================
+WARRANTY DISCLAIMER
+================================================================
+
+This software is provided "as is" without warranty of any kind,
+either express or implied. The author disclaims all liability
+for any damages arising from the use of this software.
+
+================================================================
+
+Click "I accept the agreement" only if you understand and agree
+to the above.

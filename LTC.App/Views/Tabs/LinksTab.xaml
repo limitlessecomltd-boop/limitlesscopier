@@ -1,0 +1,111 @@
+<UserControl x:Class="LTC.App.Views.Tabs.LinksTab"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource BgBaseBrush}"
+             Foreground="{DynamicResource TextPrimaryBrush}"
+             FontFamily="{StaticResource FontUi}"
+             FontSize="12">
+    <!--
+        LinksTab — every copy link between master and slave. Lets the user
+        scan all the M×N routing at a glance and add new links from one
+        place. Edit/Delete actions on each row.
+    -->
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="COPY LINKS"
+                           FontFamily="{StaticResource FontDisplay}" FontSize="28"
+                           Foreground="{DynamicResource TextStrongBrush}" LineHeight="28" />
+                <TextBlock Text="Routing between masters and slaves"
+                           FontFamily="{StaticResource FontMono}" FontSize="10" FontWeight="Medium"
+                           Foreground="{DynamicResource TextFaintBrush}" Margin="0,3,0,0" />
+            </StackPanel>
+            <Button Style="{StaticResource PrimaryButton}"
+                    Content="+ Add link" Padding="14,7"
+                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Click="OnAddLinkClick" />
+        </Grid>
+
+        <Border Grid.Row="1"
+                Background="{DynamicResource BgPanelBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="1" CornerRadius="8">
+            <Grid>
+                <!-- Empty state when no links exist -->
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Visibility="{Binding HasLinks, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                            MaxWidth="380" Margin="40">
+                    <TextBlock Text="No copy links yet"
+                               FontSize="18" FontWeight="Medium"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               HorizontalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock TextWrapping="Wrap" TextAlignment="Center"
+                               FontSize="12" Foreground="{DynamicResource TextDimBrush}"
+                               Text="Connect a master to a slave to start copying trades. Each link can have its own lot sizing and filters." />
+                </StackPanel>
+
+                <!-- Links list -->
+                <ItemsControl ItemsSource="{Binding Links}"
+                              Visibility="{Binding HasLinks, Converter={StaticResource BoolToVis}}">
+                    <ItemsControl.Template>
+                        <ControlTemplate>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsPresenter />
+                            </ScrollViewer>
+                        </ControlTemplate>
+                    </ItemsControl.Template>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                    BorderThickness="0,0,0,1" Padding="14,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding MasterName}"
+                                                       FontWeight="Medium" FontSize="12"
+                                                       Foreground="{DynamicResource MasterBrush}" />
+                                            <TextBlock Text="  →  "
+                                                       FontFamily="{StaticResource FontMono}" FontSize="11"
+                                                       Foreground="{DynamicResource TextFaintBrush}" />
+                                            <TextBlock Text="{Binding SlaveName}"
+                                                       FontWeight="Medium" FontSize="12"
+                                                       Foreground="{DynamicResource SlaveBrush}" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding LotSizingSummary}"
+                                                   FontFamily="{StaticResource FontMono}" FontSize="10" FontWeight="Medium"
+                                                   Foreground="{DynamicResource TextDimBrush}" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding CountersText}"
+                                               FontFamily="{StaticResource FontMono}" FontSize="10" FontWeight="Medium"
+                                               Foreground="{Binding CountersColorKey, Converter={StaticResource KeyToBrush}}"
+                                               VerticalAlignment="Center" Margin="12,0,12,0" />
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Style="{StaticResource GhostButton}"
+                                                Content="Edit" Padding="10,4" FontSize="10"
+                                                Margin="0,0,6,0"
+                                                Click="OnEditLinkClick"
+                                                Tag="{Binding}" />
+                                        <Button Style="{StaticResource GhostButton}"
+                                                Content="Delete" Padding="10,4" FontSize="10"
+                                                Click="OnDeleteLinkClick"
+                                                Tag="{Binding}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

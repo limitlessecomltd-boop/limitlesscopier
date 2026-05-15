@@ -1,0 +1,81 @@
+# ===================================================================
+# Limitless monorepo .gitignore
+# ===================================================================
+# Aggressive about NEVER committing:
+#   - private keys (signing key for licenses; would compromise all licenses if leaked)
+#   - SQLite databases (contain customer emails and license records)
+#   - logs (large, contain PII)
+#   - build output (regenerable, just bloats the repo)
+#
+# Aggressive about NEVER excluding:
+#   - source code
+#   - csproj / sln files
+#   - configuration TEMPLATES (appsettings.json — but NOT appsettings.Production.json)
+# ===================================================================
+
+# --- SECRETS — MUST NEVER COMMIT ---
+*.key
+*.pem
+*.pfx
+keygen-private.key
+keygen-private.txt
+appsettings.Production.json
+appsettings.Local.json
+.env
+.env.*
+!.env.example
+
+# --- DATABASES ---
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+licenses.db*
+ltc.db*
+
+# --- LOGS ---
+logs/
+*.log
+*.log.*
+
+# --- .NET BUILD OUTPUT ---
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# --- VISUAL STUDIO / RIDER ---
+.vs/
+.idea/
+*.swp
+*~
+
+# --- TEST RESULTS ---
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.coverage
+*.coveragexml
+
+# --- OS FILES ---
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# --- INSTALLER OUTPUT (these go on GitHub Releases, not in repo) ---
+installer/Output/
+obfuscation/Output/
+
+# --- TEMP / SCRATCH ---
+tmp/
+temp/
+scratch/
+*.tmp

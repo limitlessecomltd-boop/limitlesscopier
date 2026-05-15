@@ -1,0 +1,4 @@
+# Inno Setup compiled installers — these are build outputs, ship the
+# .exe by uploading not by committing.
+Output/
+*.exe

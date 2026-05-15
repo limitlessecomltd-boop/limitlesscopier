@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>LTC.Core</AssemblyName>
+    <RootNamespace>LTC.Core</RootNamespace>
+    <Description>Limitless Trade Copier - Core business logic (broker connections, routing, risk).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
+    <!-- Ed25519 signature primitives for the licensing system. Same package
+         used by LTC.App (verifier) and LTC.KeyGen (signer). Lives in Core
+         so the data + crypto shape is shared verbatim across both. -->
+    <PackageReference Include="NSec.Cryptography" Version="24.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The DLL's internal assembly identity is "mt5api" (not "mtapi.mt5") even
+      though the file on disk is named "mtapi.mt5.dll". The Include name MUST
+      match the internal identity for MSBuild to resolve and copy correctly.
+      The HintPath then points at the actual file.
+    -->
+    <Reference Include="mt5api">
+      <HintPath>..\lib\mtapi.mt5.dll</HintPath>
+      <Private>true</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    Belt and braces: even with <Private>true</Private>, the file is renamed by
+    MSBuild on the way to the output folder (it would land as "mt5api.dll"
+    matching the assembly name). We also copy the original file as-is so
+    AssemblyResolve fallback in App.xaml.cs can find "mtapi.mt5.dll" by name.
+  -->
+  <ItemGroup>
+    <None Include="..\lib\mtapi.mt5.dll">
+      <Link>mtapi.mt5.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+
+</Project>

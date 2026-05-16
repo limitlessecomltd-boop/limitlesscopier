@@ -57,6 +57,13 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        
+        // Keep the app alive through the gap between dialog close and MainWindow.Show().
+        // Without this, the dispatcher's Background-priority InitializeAndShowMain queue
+        // can lose the race against the splash's auto-close timer, leaving the dispatcher
+        // loop with zero windows under default OnLastWindowClose mode -> silent exit.
+        // InitializeAndShowMain restores OnMainWindowClose once MainWindow is up.
+        this.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         // Resolver was registered in the static constructor above.
 
@@ -137,8 +144,8 @@ public partial class App : Application
             // Defer heavy init until after the splash has rendered its first frame,
             // otherwise the work blocks the UI thread and the animation jitters or
             // doesn't appear at all on slow machines.
-            Dispatcher.BeginInvoke(new Action(() => InitializeAndShowMain(splash)),
-                                   System.Windows.Threading.DispatcherPriority.Background);
+            Dispatcher.BeginInvoke(new Action(() => InitializeAndShowMain(splash)));
+
         }
         catch (Exception ex)
         {
@@ -207,6 +214,8 @@ public partial class App : Application
             splash.Closed += (_, _) =>
             {
                 window.Show();
+                // MainWindow is up — restore normal shutdown semantics so closing it exits the app.
+                Current?.Dispatcher?.Invoke(() => { Current.ShutdownMode = ShutdownMode.OnMainWindowClose; });
                 window.Activate();
             };
 
@@ -215,6 +224,8 @@ public partial class App : Application
             if (!splash.IsLoaded || splash.Visibility != Visibility.Visible)
             {
                 window.Show();
+                // MainWindow is up — restore normal shutdown semantics so closing it exits the app.
+                Current?.Dispatcher?.Invoke(() => { Current.ShutdownMode = ShutdownMode.OnMainWindowClose; });
                 window.Activate();
             }
         }

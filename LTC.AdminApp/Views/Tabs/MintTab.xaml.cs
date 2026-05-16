@@ -1,69 +1,67 @@
 using System;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using LTC.AdminApp.Services;
-using Microsoft.Win32;
 
 namespace LTC.AdminApp.Views.Tabs;
 
 /// <summary>
-/// Mint tab — form for issuing a license. Validates inputs live (Mint
-/// button enables only when all fields are reasonable), delegates the
-/// actual signing to <see cref="LicenseMinter"/>, and shows either a
-/// green success panel or red error panel below the form.
+/// Mint tab — sends a request to the activation server's
+/// <c>/admin/keys/issue</c> endpoint, displays the server-returned
+/// license key in a copy-friendly way.
+///
+/// The flow that disappeared with this refactor: gathering a customer
+/// fingerprint, signing locally, writing a .lic file. The fingerprint is
+/// now collected by the customer's <c>LTC.App</c> at activation time
+/// and the server signs the binding token. The admin operator only deals
+/// in opaque "license keys" — much simpler.
 /// </summary>
 public partial class MintTab : UserControl
 {
-    private readonly LicenseMinter _minter = new();
-    private MintResult? _lastResult;
-    private string? _lastWritePath;
+    private AdminSettings _settings;
+    private IssueKeyResponse? _lastResult;
 
     public MintTab()
     {
         InitializeComponent();
+        _settings = AdminSettings.Load();
 
-        // Validate on every keystroke in any of the relevant fields.
-        EmailBox.TextChanged       += (_, _) => UpdateValidation();
-        FingerprintBox.TextChanged += (_, _) => UpdateValidation();
-        OutputBox.TextChanged      += (_, _) => UpdateValidation();
-        DaysBox.TextChanged        += (_, _) => UpdateValidation();
-
-        UpdateValidation();
+        // Validate on every keystroke.
+        EmailBox.TextChanged += (_, _) => UpdateValidation();
+        DaysBox.TextChanged  += (_, _) => UpdateValidation();
+        Loaded += OnLoaded;
     }
 
-    // -----------------------------------------------------------------
-    // VALIDATION
-    // -----------------------------------------------------------------
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        // Re-load settings every time the tab becomes visible — operator
+        // may have just configured them in the Settings tab.
+        _settings = AdminSettings.Load();
+        NotConfiguredBanner.Visibility =
+            _settings.IsConfigured ? Visibility.Collapsed : Visibility.Visible;
+        UpdateValidation();
+    }
 
     private void UpdateValidation()
     {
         var (ok, reason) = ValidateInputs();
-        MintButton.IsEnabled  = ok;
-        ValidationText.Text   = ok ? "Ready to mint." : reason;
+        MintButton.IsEnabled = ok;
+        ValidationText.Text  = ok ? "Ready to mint." : reason;
     }
 
     private (bool ok, string reason) ValidateInputs()
     {
+        if (!_settings.IsConfigured)
+            return (false, "Configure the server connection in Settings first.");
         if (string.IsNullOrWhiteSpace(EmailBox.Text))
             return (false, "Customer email is required.");
         if (!EmailBox.Text.Contains('@'))
             return (false, "Email looks invalid (no '@').");
 
-        var fp = (FingerprintBox.Text ?? "").Trim();
-        if (string.IsNullOrEmpty(fp))
-            return (false, "Paste the customer's fingerprint.");
-        var parts = fp.Split('-');
-        if (parts.Length != 4 || parts.Any(p => p.Length != 32))
-            return (false, $"Fingerprint format wrong (need 4 chunks of 32 hex chars; got {parts.Length}).");
-
-        if (string.IsNullOrWhiteSpace(OutputBox.Text))
-            return (false, "Output filename is required.");
-
-        var selectedPlan = (PlanBox.SelectedItem as ComboBoxItem)?.Content as string ?? "";
-        if (selectedPlan == "Daily")
+        var plan = SelectedPlan();
+        if (plan == "Daily")
         {
             if (!int.TryParse(DaysBox.Text, out var d) || d <= 0)
                 return (false, "Daily plan needs a positive number of days.");
@@ -72,102 +70,103 @@ public partial class MintTab : UserControl
         return (true, "Ready to mint.");
     }
 
+    private string SelectedPlan() =>
+        (PlanBox.SelectedItem as ComboBoxItem)?.Content as string ?? "Lifetime";
+
     private void OnPlanSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Days field only matters for the Daily plan.
-        if (DaysBox is null) return;  // happens during init
-        var plan = (PlanBox.SelectedItem as ComboBoxItem)?.Content as string ?? "";
-        DaysBox.IsEnabled = (plan == "Daily");
+        if (DaysBox is null) return;  // init
+        DaysBox.IsEnabled = (SelectedPlan() == "Daily");
         UpdateValidation();
     }
 
     // -----------------------------------------------------------------
-    // BROWSE OUTPUT PATH
+    // MINT — server call
     // -----------------------------------------------------------------
-
-    private void OnBrowseOutputClick(object sender, RoutedEventArgs e)
-    {
-        var sfd = new SaveFileDialog
-        {
-            Filter = "License files (*.lic)|*.lic|All files (*.*)|*.*",
-            DefaultExt = "lic",
-            FileName = Path.GetFileName(OutputBox.Text),
-            InitialDirectory = ResolveInitialDir(),
-        };
-        if (sfd.ShowDialog() == true)
-        {
-            OutputBox.Text = sfd.FileName;
-        }
-    }
-
-    private string ResolveInitialDir()
-    {
-        try
-        {
-            var path = OutputBox.Text;
-            if (string.IsNullOrWhiteSpace(path)) return Environment.CurrentDirectory;
-            var dir = Path.GetDirectoryName(Path.GetFullPath(path));
-            return Directory.Exists(dir) ? dir! : Environment.CurrentDirectory;
-        }
-        catch { return Environment.CurrentDirectory; }
-    }
-
-    // -----------------------------------------------------------------
-    // MINT
-    // -----------------------------------------------------------------
-
-    private void OnMintClick(object sender, RoutedEventArgs e)
+    private async void OnMintClick(object sender, RoutedEventArgs e)
     {
         HideResultAndError();
 
-        var plan = (PlanBox.SelectedItem as ComboBoxItem)?.Content as string ?? "Lifetime";
-        var days = (plan == "Daily" && int.TryParse(DaysBox.Text, out var d)) ? d : 0;
+        var plan = SelectedPlan();
+        int? days = null;
+        if (plan == "Daily" && int.TryParse(DaysBox.Text, out var d) && d > 0)
+            days = d;
 
-        var request = new MintRequest(
-            Email:           EmailBox.Text.Trim(),
-            Plan:            plan,
-            Fingerprint:     FingerprintBox.Text.Trim(),
-            Days:            days,
-            PrivateKeyPath:  ""); // empty → uses default "keygen-private.key" path
+        var req = new IssueKeyRequest
+        {
+            Email = EmailBox.Text.Trim(),
+            Plan  = plan,
+            Days  = days,
+            Notes = string.IsNullOrWhiteSpace(NotesBox.Text) ? null : NotesBox.Text.Trim(),
+        };
 
+        SetBusy(true);
         try
         {
-            var result = _minter.Mint(request);
+            using var client = new AdminApiClient(_settings);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-            // Resolve output path (relative paths → working dir)
-            var outPath = Path.GetFullPath(OutputBox.Text);
-            _minter.WriteToFile(result, outPath);
+            var result = await client.IssueKeyAsync(req, cts.Token);
 
-            _lastResult = result;
-            _lastWritePath = outPath;
-            ShowResult(result, outPath);
+            switch (result.Kind)
+            {
+                case AdminApiResultKind.Success:
+                    _lastResult = result.Body;
+                    ShowResult(result.Body!);
+                    if (Window.GetWindow(this) is MainWindow mw)
+                        mw.SetStatus($"minted {result.Body!.LicenseKey}");
+                    break;
+
+                case AdminApiResultKind.ServerRejected:
+                    ShowError(result.Message);
+                    break;
+
+                case AdminApiResultKind.NetworkFailure:
+                    ShowError("Couldn't reach the activation server. " + result.Message);
+                    break;
+            }
         }
-        catch (MintException ex)
+        catch (OperationCanceledException)
         {
-            ShowError(ex.Message);
+            ShowError("Request timed out. Check your internet connection and try again.");
+        }
+        catch (ArgumentException ex)
+        {
+            // AdminApiClient throws this when settings are missing.
+            ShowError(ex.Message + " Open the Settings tab to configure the connection.");
         }
         catch (Exception ex)
         {
             ShowError($"Unexpected error: {ex.Message}");
         }
+        finally
+        {
+            SetBusy(false);
+        }
     }
 
-    private void ShowResult(MintResult result, string fullPath)
+    private void SetBusy(bool busy)
     {
-        ResultKeyText.Text   = result.LicenseKey;
-        ResultEmailText.Text = result.Token.Email;
-        ResultPlanText.Text  = result.Token.Plan
-                             + (result.Token.ExpiresUtc == DateTime.MaxValue
-                                ? "  ·  never expires"
-                                : $"  ·  expires {result.Token.ExpiresUtc:yyyy-MM-dd}");
-        ResultPathText.Text  = fullPath;
+        EmailBox.IsEnabled  = !busy;
+        PlanBox.IsEnabled   = !busy;
+        DaysBox.IsEnabled   = !busy && (SelectedPlan() == "Daily");
+        NotesBox.IsEnabled  = !busy;
+        MintButton.IsEnabled = !busy && ValidateInputs().ok;
+        BusyText.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+    }
 
+    // -----------------------------------------------------------------
+    // RESULT / ERROR DISPLAY
+    // -----------------------------------------------------------------
+    private void ShowResult(IssueKeyResponse r)
+    {
+        ResultKeyText.Text   = r.LicenseKey;
+        ResultEmailText.Text = r.Email;
+        ResultPlanText.Text  = r.ExpiresAt is null
+            ? $"{r.Plan}  ·  never expires"
+            : $"{r.Plan}  ·  expires {r.ExpiresAt:yyyy-MM-dd}";
         ResultPanel.Visibility = Visibility.Visible;
         ErrorPanel.Visibility = Visibility.Collapsed;
-
-        // Update window status if we're hosted in MainWindow
-        if (Window.GetWindow(this) is MainWindow mw)
-            mw.SetStatus($"minted {result.LicenseKey}");
     }
 
     private void ShowError(string message)
@@ -175,7 +174,6 @@ public partial class MintTab : UserControl
         ErrorText.Text = message;
         ErrorPanel.Visibility = Visibility.Visible;
         ResultPanel.Visibility = Visibility.Collapsed;
-
         if (Window.GetWindow(this) is MainWindow mw)
             mw.SetStatus("mint failed");
     }
@@ -189,46 +187,53 @@ public partial class MintTab : UserControl
     // -----------------------------------------------------------------
     // POST-MINT ACTIONS
     // -----------------------------------------------------------------
-
-    private void OnRevealInExplorerClick(object sender, RoutedEventArgs e)
+    private void OnCopyKeyClick(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(_lastWritePath)) return;
+        if (_lastResult is null) return;
         try
         {
-            Process.Start("explorer.exe", $"/select,\"{_lastWritePath}\"");
+            Clipboard.SetText(_lastResult.LicenseKey);
+            if (Window.GetWindow(this) is MainWindow mw)
+                mw.SetStatus("key copied to clipboard");
         }
         catch (Exception ex)
         {
-            ShowError($"Could not open Explorer: {ex.Message}");
+            ShowError($"Could not copy: {ex.Message}");
         }
     }
 
-    private void OnCopySummaryClick(object sender, RoutedEventArgs e)
+    private void OnCopyEmailClick(object sender, RoutedEventArgs e)
     {
-        if (_lastResult is null || _lastWritePath is null) return;
+        if (_lastResult is null) return;
+        var expiresLine = _lastResult.ExpiresAt is null
+            ? "Plan: " + _lastResult.Plan + " (lifetime — no expiry)"
+            : $"Plan: {_lastResult.Plan}, expires {_lastResult.ExpiresAt:yyyy-MM-dd}";
 
-        var summary = $"""
-            Limitless Trade Copier — License Issued
+        var body = $"""
+            Hi,
 
-            Customer:    {_lastResult.Token.Email}
-            License key: {_lastResult.LicenseKey}
-            Plan:        {_lastResult.Token.Plan}
-            Issued:      {_lastResult.Token.IssuedUtc:yyyy-MM-dd HH:mm} UTC
-            Expires:     {(_lastResult.Token.ExpiresUtc == DateTime.MaxValue
-                            ? "never" : _lastResult.Token.ExpiresUtc.ToString("yyyy-MM-dd"))}
-            File:        {Path.GetFileName(_lastWritePath)}
+            Thank you for purchasing Limitless Trade Copier. Your license key is:
 
-            Customer instructions:
-              1. Save the attached .lic file
-              2. In the app, click "Install file..." in the License dialog
-                 (or copy it to %LOCALAPPDATA%\LimitlessTradeCopier\activation.dat)
-              3. Restart the app
+                {_lastResult.LicenseKey}
+
+            {expiresLine}
+
+            To activate:
+              1. Download and install Limitless Trade Copier
+              2. On first launch, the License dialog will appear
+              3. Paste the key above and click "Activate"
+
+            The key will bind to your machine on first use. If you ever need
+            to move to a different PC, contact support and we'll release the
+            binding so you can re-activate on the new machine.
+
+            — Limitless Trade Copier
             """;
         try
         {
-            Clipboard.SetText(summary);
+            Clipboard.SetText(body);
             if (Window.GetWindow(this) is MainWindow mw)
-                mw.SetStatus("summary copied to clipboard");
+                mw.SetStatus("email body copied to clipboard");
         }
         catch (Exception ex)
         {
@@ -238,10 +243,8 @@ public partial class MintTab : UserControl
 
     private void OnMintAnotherClick(object sender, RoutedEventArgs e)
     {
-        // Clear the form, hide the result, keep the operator in the Mint tab
-        EmailBox.Text       = "";
-        FingerprintBox.Text = "";
-        // Plan/Days/Output kept — usually batches share these
+        EmailBox.Text = "";
+        NotesBox.Text = "";
         HideResultAndError();
         EmailBox.Focus();
     }

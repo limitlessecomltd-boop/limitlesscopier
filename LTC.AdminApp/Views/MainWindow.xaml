@@ -15,20 +15,12 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
     <!--
-        Admin app shell. Matches the customer app's MainShell layout
-        (top bar + sidebar + content area). Two visual differences vs
-        the customer app:
+        Admin app shell with four sidebar tabs: Mint, Fingerprint, Settings, About.
+        Visual differences vs the customer app:
           1. ADMIN red pill next to the brand mark
           2. No live trading stats in the top bar
-
-        Three tabs initially: MINT, FINGERPRINT, ABOUT. The styles below
-        are copied from the customer app's MainShell so the sidebar
-        looks identical between the two apps. (If we have more divergence
-        later, these styles move into a shared dictionary.)
     -->
-
     <Window.Resources>
-        <!-- Sidebar nav item — identical to the customer app's NavItem. -->
         <Style x:Key="NavItem" TargetType="RadioButton">
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Margin" Value="6,2" />
@@ -65,7 +57,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
         <Style x:Key="NavLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="Medium" />
@@ -73,28 +64,25 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
     </Window.Resources>
-
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="48" />       <!-- top bar -->
-            <RowDefinition Height="*" />        <!-- content area -->
-            <RowDefinition Height="26" />       <!-- status bar -->
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="26" />
         </Grid.RowDefinitions>
 
-        <!-- ============================== TOP BAR ============================== -->
+        <!-- TOP BAR -->
         <Border Grid.Row="0"
                 Background="{DynamicResource BgVoidBrush}"
                 BorderBrush="{DynamicResource BorderSubtleBrush}"
                 BorderThickness="0,0,0,1">
             <Grid Margin="16,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />   <!-- brand -->
-                    <ColumnDefinition Width="Auto" />   <!-- admin badge -->
-                    <ColumnDefinition Width="*" />      <!-- spacer -->
-                    <ColumnDefinition Width="Auto" />   <!-- operator info -->
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-
-                <!-- Brand mark -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Grid Width="34" Height="18" Margin="0,0,10,0">
                         <Ellipse Width="14" Height="14" Fill="{DynamicResource MasterBrush}"
@@ -110,8 +98,6 @@
                                Foreground="{DynamicResource TextPrimaryBrush}"
                                VerticalAlignment="Center" />
                 </StackPanel>
-
-                <!-- ADMIN pill in red so this window is unmistakable -->
                 <Border Grid.Column="1"
                         Background="#7F1D1D"
                         CornerRadius="3"
@@ -123,8 +109,6 @@
                                FontWeight="Bold"
                                Foreground="#FCA5A5" />
                 </Border>
-
-                <!-- Operator/machine info -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="MACHINE"
                                FontFamily="{StaticResource FontMono}" FontSize="8"
@@ -141,14 +125,12 @@
             </Grid>
         </Border>
 
-        <!-- ============================== MAIN AREA ============================== -->
+        <!-- MAIN -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="220" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-
-            <!-- Sidebar nav -->
             <Border Grid.Column="0"
                     Background="{DynamicResource BgVoidBrush}"
                     BorderBrush="{DynamicResource BorderSubtleBrush}"
@@ -159,19 +141,21 @@
                                FontWeight="Medium"
                                Foreground="{DynamicResource TextDimBrush}"
                                Margin="18,0,0,8" />
-
                     <RadioButton x:Name="NavMint" Style="{StaticResource NavItem}"
                                  IsChecked="True" GroupName="Nav" Tag="◉"
                                  Checked="OnNavMintChecked">
                         <TextBlock Text="Mint license" Style="{StaticResource NavLabel}" />
                     </RadioButton>
-
                     <RadioButton x:Name="NavFingerprint" Style="{StaticResource NavItem}"
                                  GroupName="Nav" Tag="⌂"
                                  Checked="OnNavFingerprintChecked">
                         <TextBlock Text="Fingerprint" Style="{StaticResource NavLabel}" />
                     </RadioButton>
-
+                    <RadioButton x:Name="NavSettings" Style="{StaticResource NavItem}"
+                                 GroupName="Nav" Tag="⚙"
+                                 Checked="OnNavSettingsChecked">
+                        <TextBlock Text="Settings" Style="{StaticResource NavLabel}" />
+                    </RadioButton>
                     <RadioButton x:Name="NavAbout" Style="{StaticResource NavItem}"
                                  GroupName="Nav" Tag="?"
                                  Checked="OnNavAboutChecked">
@@ -187,11 +171,7 @@
                                FontSize="11"
                                Foreground="{DynamicResource TextFaintBrush}"
                                Margin="20,2,0,2" />
-                    <TextBlock Text="·  Inspect .lic"
-                               FontSize="11"
-                               Foreground="{DynamicResource TextFaintBrush}"
-                               Margin="20,2,0,2" />
-                    <TextBlock Text="·  Activation server"
+                    <TextBlock Text="·  Revoke / list keys"
                                FontSize="11"
                                Foreground="{DynamicResource TextFaintBrush}"
                                Margin="20,2,0,2" />
@@ -202,15 +182,15 @@
                 </StackPanel>
             </Border>
 
-            <!-- Tab content area (3 panels, only one visible at a time) -->
             <Grid Grid.Column="1" Background="{DynamicResource BgBaseBrush}">
                 <ContentControl x:Name="TabMintHost" Visibility="Visible" />
                 <ContentControl x:Name="TabFingerprintHost" Visibility="Collapsed" />
+                <ContentControl x:Name="TabSettingsHost" Visibility="Collapsed" />
                 <ContentControl x:Name="TabAboutHost" Visibility="Collapsed" />
             </Grid>
         </Grid>
 
-        <!-- ============================== STATUS BAR ============================== -->
+        <!-- STATUS BAR -->
         <Border Grid.Row="2"
                 Background="{DynamicResource BgVoidBrush}"
                 BorderBrush="{DynamicResource BorderSubtleBrush}"
@@ -228,7 +208,7 @@
                            Foreground="{DynamicResource TextDimBrush}"
                            VerticalAlignment="Center" />
                 <TextBlock Grid.Column="1"
-                           Text="v0.1 admin"
+                           Text="v0.2 admin"
                            FontFamily="{StaticResource FontMono}" FontSize="10"
                            FontWeight="Medium"
                            Foreground="{DynamicResource TextFaintBrush}"

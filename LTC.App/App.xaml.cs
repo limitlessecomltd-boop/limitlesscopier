@@ -120,6 +120,10 @@ public partial class App : Application
         }
         // From here on, exactly one of ActiveLicense / ActiveToken is set.
 
+        // Start the periodic heartbeat (every 6 hours). Idempotent — safe
+        // to call from anywhere. See App.Heartbeat.cs.
+        StartHeartbeatTimer();
+
         try
         {
             // Show the boot splash IMMEDIATELY so the user sees motion right away.

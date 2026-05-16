@@ -16,10 +16,10 @@ namespace LTC.Core.Licensing;
 /// The wire format inside the file (after DPAPI decryption) is a small
 /// length-prefixed binary blob followed by an Ed25519 signature. The
 /// signature is computed over the canonical bytes of all fields below
-/// using our private key (kept in the admin tool). The app verifies
-/// using the embedded public key in the verifier class.
+/// using our private key (kept on the server). The app verifies using
+/// the embedded public key in the verifier class.
 ///
-/// Layout (must match the writer in the admin tool):
+/// Layout (must match the writer on the server):
 ///   uint8     format version (currently 1)
 ///   uint16    license key length
 ///   N bytes   license key (UTF-8, e.g. "LTC-XKQ7-9PRT-FB2C-AM4Z")
@@ -50,9 +50,31 @@ public sealed class ActivationToken
     public FingerprintBundle Fingerprint { get; init; } =
         new FingerprintBundle("", "", "", "");
 
+    /// <summary>
+    /// How much wall-clock slack we allow between <see cref="HeartbeatDueUtc"/>
+    /// passing and the client refusing to start (<see cref="IsHardLocked"/>).
+    /// 4 hours covers brief outages and accommodates customers whose
+    /// internet just dropped right at the boundary — without giving a
+    /// cracked binary an extra week to operate offline.
+    ///
+    /// Together with the server-set heartbeat window (currently 48h, see
+    /// <c>CustomerEndpoints.BuildToken</c>), this means a healthy app will
+    /// re-verify with the server every ~2 days, and a fully offline app
+    /// stops working at 48h + 4h = 52h since its last server contact.
+    /// </summary>
+    public static readonly TimeSpan HardLockSlack = TimeSpan.FromHours(4);
+
     public bool IsExpired => DateTime.UtcNow > ExpiresUtc;
+
+    /// <summary>True once the client is past <see cref="HeartbeatDueUtc"/>.
+    /// The app should attempt a heartbeat as soon as possible; if it
+    /// succeeds the new token will push this back.</summary>
     public bool NeedsHeartbeat => DateTime.UtcNow > HeartbeatDueUtc;
-    public bool IsHardLocked => DateTime.UtcNow > HeartbeatDueUtc.AddDays(7);
+
+    /// <summary>True once we're past <see cref="HeartbeatDueUtc"/> plus
+    /// <see cref="HardLockSlack"/>. The app must refuse to start trading
+    /// in this state — only re-activation (online) clears it.</summary>
+    public bool IsHardLocked => DateTime.UtcNow > HeartbeatDueUtc + HardLockSlack;
 }
 
 /// <summary>

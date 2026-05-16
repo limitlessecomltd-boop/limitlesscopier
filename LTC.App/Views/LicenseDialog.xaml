@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="License — Limitless Trade Copier"
         Icon="/Assets/ltc-icon.ico"
-        Height="560" Width="600"
-        MinHeight="500" MinWidth="540"
+        Height="640" Width="600"
+        MinHeight="560" MinWidth="540"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
         SizeToContent="Manual"
@@ -16,24 +16,23 @@
         TextOptions.TextRenderingMode="ClearType"
         UseLayoutRounding="True">
     <!--
-        New license dialog for the hardware-bound activation system.
-        Shows the customer their machine fingerprint (so they can email it
-        to support) and accepts a .lic file to install. Falls back to the
-        legacy key-paste flow for customers who already have an old-style
-        license key from the simple licensing system.
+        License activation dialog. Two paths to activate:
 
-        Layout:
-          - Top: small brand mark + Title
-          - Section 1: "Your machine fingerprint" box with copy button
-          - Section 2: Two buttons — "Install license file" / "I have a license key"
-          - Section 3: status banner (validation feedback)
-          - Bottom: Quit button
-    -->
-    <!--
-        DockPanel keeps the footer (Quit button) pinned to the bottom of the
-        window at all times, even when the inner content scrolls. Everything
-        above goes inside a ScrollViewer so users on small displays / low DPI
-        can always reach the Install File button by scrolling.
+          PRIMARY: Paste your license key. App calls the activation server,
+          server signs a token bound to this machine, app stores it. This
+          is what 99% of customers will do.
+
+          FALLBACK: Install a .lic file. For support cases — operator emails
+          you a pre-signed file generated from your fingerprint. Used when
+          the customer can't reach the server, has a custom license, etc.
+
+        Layout (top to bottom inside a scrollable region, footer pinned):
+          - Brand header + subtitle
+          - "Your machine fingerprint" panel (shown for support purposes)
+          - PRIMARY: License key entry + Activate button
+          - FALLBACK: "Or install a license file" link → file picker
+          - Status banner (success/error feedback)
+          - Quit button pinned to footer
     -->
     <DockPanel>
         <!-- Footer pinned to bottom — declared FIRST so DockPanel reserves space -->
@@ -57,147 +56,180 @@
                       Padding="0">
             <Grid Margin="28,28,28,16">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />     <!-- header -->
-                    <RowDefinition Height="Auto" />     <!-- fingerprint -->
-                    <RowDefinition Height="Auto" />     <!-- separator -->
-                    <RowDefinition Height="Auto" />     <!-- install area -->
-                    <RowDefinition Height="Auto" />     <!-- status banner -->
+                    <RowDefinition Height="Auto" />     <!-- 0 header -->
+                    <RowDefinition Height="Auto" />     <!-- 1 fingerprint -->
+                    <RowDefinition Height="Auto" />     <!-- 2 ACTIVATE label -->
+                    <RowDefinition Height="Auto" />     <!-- 3 paste-key card (primary) -->
+                    <RowDefinition Height="Auto" />     <!-- 4 install-file expander -->
+                    <RowDefinition Height="Auto" />     <!-- 5 status banner -->
                 </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,20">
-            <Grid Width="34" Height="18" Margin="0,0,10,0">
-                <Ellipse Width="14" Height="14" Fill="{DynamicResource MasterBrush}"
-                         HorizontalAlignment="Left" VerticalAlignment="Center" />
-                <Ellipse Width="14" Height="14" Fill="{DynamicResource SlaveBrush}"
-                         HorizontalAlignment="Right" VerticalAlignment="Center" />
-                <Rectangle Width="5" Height="14" Fill="{DynamicResource BrandBrush}"
-                           RadiusX="2.5" RadiusY="2.5"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Grid>
-            <StackPanel>
-                <TextBlock Text="LICENSE"
-                           FontFamily="{StaticResource FontDisplay}" FontSize="22"
-                           Foreground="{DynamicResource TextPrimaryBrush}" />
-                <TextBlock Text="Activate Limitless Trade Copier on this machine"
-                           FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
-                           Margin="0,2,0,0" />
-            </StackPanel>
-        </StackPanel>
+                <!-- Header -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,20">
+                    <Grid Width="34" Height="18" Margin="0,0,10,0">
+                        <Ellipse Width="14" Height="14" Fill="{DynamicResource MasterBrush}"
+                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                        <Ellipse Width="14" Height="14" Fill="{DynamicResource SlaveBrush}"
+                                 HorizontalAlignment="Right" VerticalAlignment="Center" />
+                        <Rectangle Width="5" Height="14" Fill="{DynamicResource BrandBrush}"
+                                   RadiusX="2.5" RadiusY="2.5"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Grid>
+                    <StackPanel>
+                        <TextBlock Text="LICENSE"
+                                   FontFamily="{StaticResource FontDisplay}" FontSize="22"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="Activate Limitless Trade Copier on this machine"
+                                   FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,2,0,0" />
+                    </StackPanel>
+                </StackPanel>
 
-        <!-- Section 1: machine fingerprint -->
-        <Border Grid.Row="1"
-                Background="{DynamicResource BgPanelBrush}"
-                BorderBrush="{DynamicResource BorderDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="16,14"
-                Margin="0,0,0,16">
-            <StackPanel>
-                <TextBlock Text="THIS MACHINE'S FINGERPRINT"
+                <!-- Section: this machine's fingerprint (for support / .lic flow) -->
+                <Border Grid.Row="1"
+                        Background="{DynamicResource BgPanelBrush}"
+                        BorderBrush="{DynamicResource BorderDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="16,14"
+                        Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="THIS MACHINE'S FINGERPRINT"
+                                   FontFamily="{StaticResource FontMono}" FontSize="9"
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource BrandBrush}"
+                                   Margin="0,0,0,8" />
+                        <TextBlock x:Name="FingerprintShortText"
+                                   Text="••••••••"
+                                   FontFamily="{StaticResource FontMono}" FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="0,0,0,10" />
+                        <TextBlock TextWrapping="Wrap" FontSize="11"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,0,0,10"
+                                   Text="If you need offline activation, send the full fingerprint below to support@limitlesscopier.com along with your purchase receipt." />
+                        <Border Background="{DynamicResource BgRaisedBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1" CornerRadius="3" Padding="10,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="FingerprintFullText"
+                                         Grid.Column="0"
+                                         IsReadOnly="True"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         Foreground="{DynamicResource TextPrimaryBrush}"
+                                         FontFamily="{StaticResource FontMono}" FontSize="10"
+                                         Text="loading..."
+                                         VerticalAlignment="Center" />
+                                <Button Grid.Column="1"
+                                        Content="Copy"
+                                        Style="{StaticResource GhostButton}"
+                                        Padding="12,4" FontSize="10"
+                                        Click="OnCopyFingerprintClick" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Separator label -->
+                <TextBlock Grid.Row="2" Text="ACTIVATE"
                            FontFamily="{StaticResource FontMono}" FontSize="9"
                            FontWeight="Medium"
-                           Foreground="{DynamicResource BrandBrush}"
-                           Margin="0,0,0,8" />
+                           Foreground="{DynamicResource TextDimBrush}"
+                           Margin="0,4,0,8" />
 
-                <!-- Short display version (8 chars) for a glance + full version in a box for copying -->
-                <TextBlock x:Name="FingerprintShortText"
-                           Text="••••••••"
-                           FontFamily="{StaticResource FontMono}" FontSize="20"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextPrimaryBrush}"
-                           Margin="0,0,0,10" />
+                <!-- PRIMARY: paste license key + activate online -->
+                <Border Grid.Row="3"
+                        Background="{DynamicResource BgPanelBrush}"
+                        BorderBrush="{DynamicResource BorderDefaultBrush}"
+                        BorderThickness="1" CornerRadius="6"
+                        Padding="20,18" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="Enter your license key"
+                                   FontSize="14" FontWeight="Medium"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock TextWrapping="Wrap"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,6,0,12"
+                                   Text="Paste the license key you received by email. We'll activate it for this machine over the internet." />
 
-                <TextBlock TextWrapping="Wrap" FontSize="11"
-                           Foreground="{DynamicResource TextMutedBrush}"
-                           Margin="0,0,0,10"
-                           Text="Send the full fingerprint below to support@limitlesscopier.com along with your payment receipt. You'll receive a license file (.lic) back — drop it in below." />
-
-                <Border Background="{DynamicResource BgRaisedBrush}"
-                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                        BorderThickness="1" CornerRadius="3" Padding="10,8">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox x:Name="FingerprintFullText"
-                                 Grid.Column="0"
-                                 IsReadOnly="True"
-                                 BorderThickness="0"
-                                 Background="Transparent"
+                        <TextBox x:Name="LicenseKeyBox"
+                                 FontFamily="{StaticResource FontMono}" FontSize="13"
+                                 Padding="10,8"
+                                 BorderBrush="{DynamicResource BorderDefaultBrush}"
+                                 BorderThickness="1"
+                                 Background="{DynamicResource BgRaisedBrush}"
                                  Foreground="{DynamicResource TextPrimaryBrush}"
-                                 FontFamily="{StaticResource FontMono}" FontSize="10"
-                                 Text="loading..."
-                                 VerticalAlignment="Center" />
-                        <Button Grid.Column="1"
-                                Content="Copy"
-                                Style="{StaticResource GhostButton}"
-                                Padding="12,4" FontSize="10"
-                                Click="OnCopyFingerprintClick" />
-                    </Grid>
+                                 KeyDown="OnLicenseKeyBoxKeyDown" />
+
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button x:Name="ActivateBtn"
+                                    Content="Activate"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Padding="22,10" FontSize="13"
+                                    Click="OnActivateOnlineClick" />
+                            <TextBlock x:Name="BusySpinnerText"
+                                       Text="  Contacting server…"
+                                       VerticalAlignment="Center"
+                                       Margin="14,0,0,0"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Visibility="Collapsed" />
+                        </StackPanel>
+                    </StackPanel>
                 </Border>
-            </StackPanel>
-        </Border>
 
-        <!-- Separator label -->
-        <TextBlock Grid.Row="2" Text="ACTIVATE"
-                   FontFamily="{StaticResource FontMono}" FontSize="9"
-                   FontWeight="Medium"
-                   Foreground="{DynamicResource TextDimBrush}"
-                   Margin="0,4,0,8" />
+                <!-- FALLBACK: install a pre-signed .lic file (support cases) -->
+                <Expander Grid.Row="4"
+                          Header="Or install a license file (offline / support cases)"
+                          Foreground="{DynamicResource TextMutedBrush}"
+                          FontSize="11"
+                          Margin="0,4,0,0"
+                          IsExpanded="False">
+                    <Border Background="{DynamicResource BgPanelBrush}"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                            BorderThickness="1" CornerRadius="6"
+                            Padding="20,16" Margin="0,8,0,0">
+                        <StackPanel>
+                            <TextBlock TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,0,0,12"
+                                       Text="If support emailed you a .lic file (for example because your network can't reach the activation server), select it here to install it offline." />
+                            <Button Content="Install license file…"
+                                    Style="{StaticResource GhostButton}"
+                                    Padding="18,8" FontSize="12"
+                                    HorizontalAlignment="Left"
+                                    Click="OnInstallLicFileClick" />
+                        </StackPanel>
+                    </Border>
+                </Expander>
 
-        <!-- Section 2: install the .lic file. Single flow, no key paste,
-             no online server — purely manual file install. -->
-        <StackPanel Grid.Row="3">
-            <Border Background="{DynamicResource BgPanelBrush}"
-                    BorderBrush="{DynamicResource BorderDefaultBrush}"
-                    BorderThickness="1" CornerRadius="6"
-                    Padding="20,18" Margin="0,0,0,10">
-                <StackPanel>
-                    <TextBlock Text="Install your license file"
-                               FontSize="14" FontWeight="Medium"
-                               Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock TextWrapping="Wrap"
-                               FontSize="11"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               Margin="0,6,0,14"
-                               Text="After purchase, support emails you a .lic file generated from your machine fingerprint above. Click below to select it." />
-                    <Button Content="Install license file…"
-                            Style="{StaticResource PrimaryButton}"
-                            Padding="22,10" FontSize="13"
-                            HorizontalAlignment="Left"
-                            Click="OnInstallLicFileClick" />
-                </StackPanel>
-            </Border>
-
-            <TextBlock TextWrapping="Wrap"
-                       FontSize="10"
-                       Foreground="{DynamicResource TextDimBrush}"
-                       Margin="4,4,0,0"
-                       Text="Don't have a .lic file yet? Copy the fingerprint above and email it to support@limitlesscopier.com with your purchase receipt." />
-        </StackPanel>
-
-        <!-- Status banner -->
-        <Border Grid.Row="4" x:Name="StatusBanner"
-                Visibility="Collapsed"
-                Background="{DynamicResource BgPanelBrush}"
-                BorderThickness="0,0,0,2"
-                Padding="14,10"
-                Margin="0,12,0,0"
-                CornerRadius="3">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock x:Name="StatusIcon" Text="✓"
-                           FontSize="16" FontWeight="Bold"
-                           VerticalAlignment="Center" Margin="0,0,10,0" />
-                <TextBlock x:Name="StatusTitle"
-                           FontSize="12" FontWeight="Medium"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextPrimaryBrush}"
-                           TextWrapping="Wrap" />
-            </StackPanel>
-        </Border>
-
+                <!-- Status banner -->
+                <Border Grid.Row="5" x:Name="StatusBanner"
+                        Visibility="Collapsed"
+                        Background="{DynamicResource BgPanelBrush}"
+                        BorderThickness="0,0,0,2"
+                        Padding="14,10"
+                        Margin="0,12,0,0"
+                        CornerRadius="3">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="StatusIcon" Text="✓"
+                                   FontSize="16" FontWeight="Bold"
+                                   VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <TextBlock x:Name="StatusTitle"
+                                   FontSize="12" FontWeight="Medium"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
             </Grid>
         </ScrollViewer>
     </DockPanel>

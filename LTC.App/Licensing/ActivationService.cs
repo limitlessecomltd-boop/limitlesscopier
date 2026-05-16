@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using LTC.Core.Licensing;
 
 namespace LTC.App.Licensing;
@@ -9,21 +11,38 @@ namespace LTC.App.Licensing;
 /// app is licensed for this machine, and if not, what the user should
 /// see (License dialog, expired warning, hardware mismatch error, etc.).
 ///
-/// This session ships the OFFLINE / manual-issuance flow:
-///   - Customer pays
-///   - You ask them for their fingerprint (the License dialog displays it)
-///   - You run `ltc-admin mint` with --fingerprint X --email Y --plan Z
-///   - Tool writes a .lic file
-///   - Customer drops the .lic at %LOCALAPPDATA%\LimitlessTradeCopier\activation.dat
-///   - App's next launch verifies the signature + fingerprint match
+/// Two activation paths, both produce the same artifact (a signed token
+/// at <c>activation.dat</c>) and are treated identically afterwards:
 ///
-/// A future session adds the activation server, at which point the
-/// "GetStatus" call will optionally heartbeat to the server. The
-/// API surface stays the same so nothing else has to change.
+///   1. <see cref="ActivateOnlineAsync"/> — customer pastes a license key,
+///      app calls the activation server, server signs a token bound to
+///      this machine. This is the normal path for paid customers.
+///
+///   2. <see cref="TryInstallLicenseFile"/> — operator emails a pre-signed
+///      <c>.lic</c> file to the customer (support cases, air-gapped
+///      installs, refunds-as-replacements). Still uses the same
+///      <see cref="ActivationTokenCodec"/> verifier — the file is just a
+///      pre-built version of what the server would have signed.
+///
+/// Once a token exists on disk, <see cref="HeartbeatAsync"/> runs every
+/// few hours to refresh it. If the server is reachable and the license
+/// is still valid, the heartbeat returns a fresh token with a new
+/// <see cref="ActivationToken.HeartbeatDueUtc"/>. If the server is
+/// unreachable, the existing token continues to be honored until
+/// <see cref="ActivationToken.HardLockSlack"/> past its expiry.
 /// </summary>
 public sealed class ActivationService
 {
     private readonly ActivationTokenStore _tokens = new();
+    private readonly LicenseApiClient _api;
+
+    public ActivationService() : this(new LicenseApiClient()) { }
+
+    /// <summary>Constructor for tests that want to inject a fake API client.</summary>
+    public ActivationService(LicenseApiClient api)
+    {
+        _api = api;
+    }
 
     /// <summary>
     /// Resolve the current activation status. Reads the saved token,
@@ -38,7 +57,7 @@ public sealed class ActivationService
             return new ActivationStatus(
                 ActivationState.NotActivated,
                 Token: null,
-                Message: "Not activated. Enter a license key to begin.");
+                Message: "Not activated. Enter your license key to begin.");
         }
 
         if (token.IsExpired)
@@ -64,12 +83,14 @@ public sealed class ActivationService
 
         if (token.IsHardLocked)
         {
-            // Server heartbeat has been overdue for 30+7 days. Not yet
-            // implemented (no server) but the gate is here for later.
+            // We're past HeartbeatDueUtc + HardLockSlack (52h since last
+            // successful server contact). Refuse to operate until the
+            // user reconnects and we successfully heartbeat again.
             return new ActivationStatus(
                 ActivationState.HeartbeatRequired,
                 Token: token,
-                Message: "License must re-verify online. Connect to the internet and restart.");
+                Message: "Couldn't verify your license for over 2 days. "
+                       + "Please reconnect to the internet and restart the app.");
         }
 
         return new ActivationStatus(
@@ -100,9 +121,164 @@ public sealed class ActivationService
     }
 
     /// <summary>
-    /// Install a .lic file the customer received from support. Validates
-    /// the signature, checks the fingerprint matches THIS machine, and
-    /// writes it to the standard activation.dat location. Returns true on
+    /// PRIMARY ACTIVATION PATH (online): customer pastes a license key,
+    /// we send {key, fingerprint} to the activation server, server signs
+    /// a token bound to this machine, we persist it.
+    ///
+    /// Returns an <see cref="OnlineActivationResult"/> describing what
+    /// happened. The UI uses Kind to decide what to show:
+    ///   - Success           → close dialog, proceed to main window
+    ///   - ServerRejected    → show the message (e.g. "License revoked")
+    ///   - NetworkFailure    → show "Couldn't reach server, check internet"
+    ///   - LocalError        → show "Invalid input"
+    /// </summary>
+    public async Task<OnlineActivationResult> ActivateOnlineAsync(
+        string licenseKey, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(licenseKey))
+            return new OnlineActivationResult(
+                OnlineActivationKind.LocalError, "Enter a license key.", null);
+
+        string fingerprint;
+        try
+        {
+            fingerprint = GetMachineFingerprintFull();
+        }
+        catch (Exception ex)
+        {
+            return new OnlineActivationResult(
+                OnlineActivationKind.LocalError,
+                $"Could not compute hardware fingerprint: {ex.Message}",
+                null);
+        }
+
+        var api = await _api.ActivateAsync(licenseKey.Trim(), fingerprint, ct)
+            .ConfigureAwait(false);
+
+        return ApplyApiResult(api, fingerprint);
+    }
+
+    /// <summary>
+    /// Refresh an existing activation. Returns the new status so the UI
+    /// can react if (e.g.) the server has revoked the license since the
+    /// last heartbeat.
+    ///
+    /// On network failure this is a NO-OP — we keep the existing token
+    /// and let <see cref="GetStatus"/> handle the offline-grace logic.
+    /// </summary>
+    public async Task<OnlineActivationResult> HeartbeatAsync(CancellationToken ct = default)
+    {
+        var existing = _tokens.LoadFromDisk();
+        if (existing is null)
+        {
+            return new OnlineActivationResult(
+                OnlineActivationKind.LocalError,
+                "No activation on disk to heartbeat.", null);
+        }
+
+        string fingerprint;
+        try
+        {
+            fingerprint = GetMachineFingerprintFull();
+        }
+        catch (Exception ex)
+        {
+            return new OnlineActivationResult(
+                OnlineActivationKind.LocalError,
+                $"Could not compute hardware fingerprint: {ex.Message}",
+                null);
+        }
+
+        var api = await _api.HeartbeatAsync(existing.LicenseKey, fingerprint, ct)
+            .ConfigureAwait(false);
+
+        return ApplyApiResult(api, fingerprint);
+    }
+
+    /// <summary>
+    /// Shared post-processing for both /activate and /heartbeat results.
+    /// On Success, verifies the signature locally, sanity-checks the
+    /// returned fingerprint matches this machine, and persists.
+    /// </summary>
+    private OnlineActivationResult ApplyApiResult(LicenseApiResult api, string sentFingerprint)
+    {
+        switch (api.Kind)
+        {
+            case ResultKind.Success:
+                if (api.TokenBytes is null || api.TokenBytes.Length == 0)
+                    return new OnlineActivationResult(OnlineActivationKind.ServerRejected,
+                        "Server returned no activation token. Contact support.", null);
+
+                ActivationToken signedToken;
+                byte[] signature;
+                try
+                {
+                    signedToken = ActivationTokenCodec.Deserialize(api.TokenBytes, out signature);
+                }
+                catch (Exception ex)
+                {
+                    return new OnlineActivationResult(OnlineActivationKind.ServerRejected,
+                        $"Server returned an unreadable token: {ex.Message}", null);
+                }
+
+                // Verify signature with the embedded public key. If this
+                // fails, the server response is forged or our keys don't
+                // match — either way, treat it as a hard error.
+                var payload = ActivationTokenCodec.SerializePayload(signedToken);
+                if (!ActivationTokenCodec.VerifySignature(payload, signature))
+                {
+                    return new OnlineActivationResult(OnlineActivationKind.ServerRejected,
+                        "Server returned a token with an invalid signature. "
+                        + "If you're sure you're on the official limitlesscopier.com server, "
+                        + "your app may need to be updated to the latest version.",
+                        null);
+                }
+
+                // Sanity-check: the token the server signed should bind to
+                // the SAME fingerprint we sent. Anything else means a bug
+                // or a man-in-the-middle.
+                var live = HardwareFingerprint.Compute();
+                var matchScore = ActivationTokenCodec.MatchScore(signedToken.Fingerprint, live);
+                if (matchScore < HardwareFingerprint.RequiredMatchCount)
+                {
+                    return new OnlineActivationResult(OnlineActivationKind.ServerRejected,
+                        $"Server signed a token for a different machine "
+                        + $"({matchScore}/4 components match). This shouldn't happen — "
+                        + "please contact support.", null);
+                }
+
+                // All checks pass. Persist.
+                try
+                {
+                    _tokens.SaveToDisk(api.TokenBytes);
+                }
+                catch (Exception ex)
+                {
+                    return new OnlineActivationResult(OnlineActivationKind.LocalError,
+                        $"Could not save activation file: {ex.Message}", null);
+                }
+                return new OnlineActivationResult(OnlineActivationKind.Success,
+                    api.Message, signedToken);
+
+            case ResultKind.ServerRejected:
+                return new OnlineActivationResult(OnlineActivationKind.ServerRejected,
+                    api.Message, null);
+
+            case ResultKind.NetworkFailure:
+                return new OnlineActivationResult(OnlineActivationKind.NetworkFailure,
+                    api.Message, null);
+
+            case ResultKind.LocalError:
+            default:
+                return new OnlineActivationResult(OnlineActivationKind.LocalError,
+                    api.Message, null);
+        }
+    }
+
+    /// <summary>
+    /// FALLBACK ACTIVATION PATH (offline): install a .lic file the customer
+    /// received from support. Validates the signature, checks the fingerprint
+    /// matches THIS machine, and writes it to activation.dat. Returns true on
     /// success; on failure populates errorMessage with a user-facing
     /// description.
     /// </summary>
@@ -115,6 +291,7 @@ public sealed class ActivationService
             // wrapper since it has to be portable across users).
             var token = ActivationTokenCodec.Deserialize(licFileBytes, out var signature);
             var payload = ActivationTokenCodec.SerializePayload(token);
+
             if (!ActivationTokenCodec.VerifySignature(payload, signature))
             {
                 errorMessage = "License file signature is invalid. The file may be corrupted, modified, or issued under a different key.";
@@ -138,7 +315,6 @@ public sealed class ActivationService
                 return false;
             }
 
-            // All checks pass — DPAPI-encrypt and save
             _tokens.SaveToDisk(licFileBytes);
             return true;
         }
@@ -149,10 +325,35 @@ public sealed class ActivationService
         }
     }
 
-    /// <summary>Clear the local activation. Used when the user wants to
-    /// move to a new machine — they call support, support runs deactivate
-    /// on the server (future), and the local file is removed so they can
-    /// re-activate elsewhere.</summary>
+    /// <summary>
+    /// Clear the local activation. Tries to notify the server first so
+    /// the activation slot is freed (allowing the user to activate on a
+    /// different machine). If the server is unreachable we delete locally
+    /// anyway — the user can still re-activate via support if needed.
+    /// </summary>
+    public async Task DeactivateAsync(CancellationToken ct = default)
+    {
+        var existing = _tokens.LoadFromDisk();
+        if (existing is not null)
+        {
+            try
+            {
+                var fingerprint = GetMachineFingerprintFull();
+                await _api.DeactivateAsync(existing.LicenseKey, fingerprint, ct)
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // Best effort — if the server call fails we still delete locally
+                // so the customer isn't stuck. The slot stays bound server-side
+                // until they contact support, but their app behaves correctly.
+            }
+        }
+        _tokens.ClearFromDisk();
+    }
+
+    /// <summary>Synchronous local-only deactivate. Same as the old API
+    /// for callers that haven't been updated to async.</summary>
     public void Deactivate() => _tokens.ClearFromDisk();
 }
 
@@ -169,5 +370,27 @@ public enum ActivationState
     Active,              // Token valid, fingerprint matches, not expired
     Expired,             // Token's expiry date has passed
     HardwareMismatch,    // Fewer than 3 of 4 components match
-    HeartbeatRequired,   // (future) Server check overdue
+    HeartbeatRequired,   // Past HeartbeatDueUtc + slack — must reconnect
+}
+
+/// <summary>
+/// Result of <see cref="ActivationService.ActivateOnlineAsync"/> /
+/// <see cref="ActivationService.HeartbeatAsync"/>. The token field is
+/// only populated on Success.
+/// </summary>
+public sealed record OnlineActivationResult(
+    OnlineActivationKind Kind,
+    string Message,
+    ActivationToken? Token);
+
+public enum OnlineActivationKind
+{
+    /// <summary>Server accepted, token signed and persisted.</summary>
+    Success,
+    /// <summary>Server reachable but said no (revoked, expired, wrong machine, etc).</summary>
+    ServerRejected,
+    /// <summary>Couldn't reach server. Existing cached token (if any) still applies.</summary>
+    NetworkFailure,
+    /// <summary>Bad input or local-side problem; nothing was sent.</summary>
+    LocalError,
 }

@@ -32,6 +32,22 @@ public static class CustomerEndpoints
     /// acceptance. 3 of 4 — same threshold as the desktop side.</summary>
     public const int FingerprintMatchRequired = 3;
 
+    /// <summary>How long an issued token is "fresh" before the client is
+    /// expected to heartbeat again. The client gets an additional
+    /// <c>ActivationToken.HardLockSlack</c> (4 hours) past this before it
+    /// refuses to start. So the effective offline limit is ~52 hours from
+    /// the last successful server contact.
+    ///
+    /// Tradeoff:
+    ///   - Lower → catches license sharing / cracks faster, but punishes
+    ///     legitimate customers whose internet drops over a weekend.
+    ///   - Higher → friendlier offline experience, but cracked binaries
+    ///     can operate offline for longer between forced re-checks.
+    /// 48 hours feels right for the prop-trading audience: most trade
+    /// during weekdays with reliable connections, but the occasional
+    /// weekend offline session shouldn't lock them out.</summary>
+    public static readonly TimeSpan HeartbeatWindow = TimeSpan.FromHours(48);
+
     public static void MapCustomerEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/activate",   HandleActivate);
@@ -109,6 +125,7 @@ public static class CustomerEndpoints
 
                 var token = BuildToken(license, bundle, req.Fingerprint);
                 var bytes = signer.SignToken(token);
+
                 await LogRequest(db, req.LicenseKey, req.Fingerprint, "activate",
                     "ok_reactivate", ip, ua);
                 return Ok(bytes);
@@ -117,7 +134,6 @@ public static class CustomerEndpoints
             // DIFFERENT machine — refuse, alert the operator.
             await LogRequest(db, req.LicenseKey, req.Fingerprint, "activate",
                 "already_active_elsewhere", ip, ua);
-
             log.LogWarning("License {Key} attempted from new machine — already bound. " +
                 "Old short={Old} new short=...{New}", license.LicenseKey,
                 license.Activation.MachineShort, ShortFromFull(req.Fingerprint));
@@ -154,6 +170,7 @@ public static class CustomerEndpoints
 
         var firstToken = BuildToken(license, bundle, req.Fingerprint);
         var firstBytes = signer.SignToken(firstToken);
+
         await LogRequest(db, req.LicenseKey, req.Fingerprint, "activate", "ok", ip, ua);
         return Ok(firstBytes);
     }
@@ -229,6 +246,7 @@ public static class CustomerEndpoints
 
         var token = BuildToken(license, bundle, req.Fingerprint);
         var bytes = signer.SignToken(token);
+
         await LogRequest(db, req.LicenseKey, req.Fingerprint, "heartbeat", "ok", ip, ua);
         return Ok(bytes);
     }
@@ -284,6 +302,7 @@ public static class CustomerEndpoints
 
         db.Activations.Remove(license.Activation);
         await db.SaveChangesAsync();
+
         await LogRequest(db, req.LicenseKey, req.Fingerprint, "deactivate", "ok", ip, ua);
         return Results.Ok(new ActivationResponse
         {
@@ -332,7 +351,8 @@ public static class CustomerEndpoints
 
     private static string ClientIp(HttpContext http)
     {
-        // X-Forwarded-For takes priority because we run behind Caddy.
+        // X-Forwarded-For takes priority because we run behind a proxy
+        // (Railway in production; was Caddy on the old VPS plan).
         var xff = http.Request.Headers["X-Forwarded-For"].FirstOrDefault();
         if (!string.IsNullOrWhiteSpace(xff))
             return xff.Split(',')[0].Trim();
@@ -369,8 +389,13 @@ public static class CustomerEndpoints
     {
         var issued = DateTime.UtcNow;
         var expires = license.ExpiresAt ?? DateTime.MaxValue;
-        // Heartbeat 30 days out; 7-day soft grace baked into the customer app.
-        var heartbeat = issued.AddDays(30);
+
+        // Heartbeat 48 hours out (configurable via HeartbeatWindow). The
+        // client adds its own 4-hour hard-lock slack on top — so total
+        // offline tolerance from last successful server contact is ~52h.
+        // See ActivationToken.HardLockSlack on the client side.
+        var heartbeat = issued + HeartbeatWindow;
+
         // If the license itself expires sooner, the token expires sooner.
         if (heartbeat > expires) heartbeat = expires;
 

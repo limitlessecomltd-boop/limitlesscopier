@@ -13,10 +13,11 @@ namespace LTC.Server.Data;
 ///   - Indexes on FingerprintFull (Activation) and License.LicenseKey for
 ///     the lookups that happen on every customer hit.
 ///
-/// SQLite was chosen for simplicity. A single ~50KB-per-license file
-/// scales to ~20k licenses easily, far past what a single-operator
-/// business is likely to hit. Migration to Postgres is a one-line
-/// config change in Program.cs when the time comes.
+/// === NOWPAY addition ===
+///   - Orders table: one row per checkout attempt. Tracks the lifecycle
+///     from "customer clicked Pay" through "NowPayments confirmed payment"
+///     to "license issued and emailed". Indexed on OrderId (PK), Email,
+///     Status, CreatedAt. EnsureCreated() at startup auto-creates the table.
 /// </summary>
 public class LicensingDbContext : DbContext
 {
@@ -26,34 +27,50 @@ public class LicensingDbContext : DbContext
     public DbSet<Activation> Activations => Set<Activation>();
     public DbSet<RequestLog> RequestLogs => Set<RequestLog>();
 
+    // === NOWPAY: BEGIN ===
+    public DbSet<Order> Orders => Set<Order>();
+    // === NOWPAY: END ===
+
     protected override void OnModelCreating(ModelBuilder mb)
     {
-        // The license key must be globally unique. SQLite enforces this
-        // at the DB layer — any attempt to insert a duplicate throws
-        // SqliteException with constraint code SQLITE_CONSTRAINT_UNIQUE.
+        // License: unique key globally
         mb.Entity<License>()
           .HasIndex(l => l.LicenseKey)
           .IsUnique();
 
-        // Fast lookup: "find activation for fingerprint X" during /activate
+        // Activation: indexed by fingerprint for the /activate lookup
         mb.Entity<Activation>()
           .HasIndex(a => a.FingerprintFull);
 
-        // One License has at most one Activation. EF Core uses the
-        // foreign key on Activation.LicenseId; we want cascade-delete
-        // so revoking a license removes its activation entry too.
+        // One License has at most one Activation
         mb.Entity<License>()
           .HasOne(l => l.Activation)
           .WithOne(a => a.License)
           .HasForeignKey<Activation>(a => a.LicenseId)
           .OnDelete(DeleteBehavior.Cascade);
 
-        // Logs are append-only; index by License + time for fraud queries
+        // RequestLog: append-only, indexed by license + time
         mb.Entity<RequestLog>()
           .HasIndex(r => new { r.LicenseKey, r.At });
 
-        // SQLite-specific: DateTime stored as ISO 8601 strings so the
-        // raw .db file is human-readable.
-        // (EF Core's default for SQLite already does this.)
+        // === NOWPAY: BEGIN - Orders entity config ===
+        mb.Entity<Order>(e =>
+        {
+            e.ToTable("Orders");
+            e.HasKey(x => x.OrderId);
+            e.Property(x => x.OrderId).HasMaxLength(40);
+            e.Property(x => x.InvoiceId).HasMaxLength(64);
+            e.Property(x => x.PaymentId).HasMaxLength(64);
+            e.Property(x => x.Email).HasMaxLength(320).IsRequired();
+            e.Property(x => x.Plan).HasMaxLength(20).IsRequired();
+            e.Property(x => x.AmountUsd).HasPrecision(18, 2);
+            e.Property(x => x.PayCurrency).HasMaxLength(20);
+            e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.Property(x => x.LicenseKey).HasMaxLength(40);
+            e.HasIndex(x => x.Email);
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.CreatedAt);
+        });
+        // === NOWPAY: END ===
     }
 }

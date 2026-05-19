@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using LTC.Server.Data;
 using LTC.Server.Models;
-using LTC.Server.Services;
 
 namespace LTC.Server.Endpoints;
 
@@ -19,11 +18,10 @@ namespace LTC.Server.Endpoints;
 /// LTC_ADMIN_TOKEN env var). If unset, the admin endpoints are
 /// disabled entirely — failing closed for safety.
 ///
-/// === NOWPAY refactor note ===
-/// IssueKey previously contained the key-generation + persist logic inline.
-/// That logic is now in LicensingService.IssueKeyAsync so both this endpoint
-/// AND the NowPayments webhook can call it. Behavior is identical: same
-/// key format, same alphabet, same License fields, same response shape.
+/// In Pass 2 these will be called by the desktop Admin app to replace
+/// the current flow where it mints .lic files directly against the
+/// private key. The server becomes the single source of truth for
+/// what's been issued.
 /// </summary>
 public static class AdminEndpoints
 {
@@ -35,25 +33,28 @@ public static class AdminEndpoints
             app.Logger.LogWarning("Admin:BearerToken not configured — admin endpoints disabled.");
             return;
         }
+
         var grp = app.MapGroup("/admin").AddEndpointFilter(async (ctx, next) =>
         {
             var auth = ctx.HttpContext.Request.Headers.Authorization.FirstOrDefault() ?? "";
             if (!auth.StartsWith("Bearer "))
                 return Results.Unauthorized();
             var supplied = auth["Bearer ".Length..].Trim();
+            // Constant-time compare to avoid timing attacks (admin token is
+            // short and bearer leaks via process listing aren't the issue,
+            // but it's free defense).
             if (!CryptographicEquals(supplied, token!))
                 return Results.Unauthorized();
             return await next(ctx);
         });
 
-        grp.MapPost("/keys/issue",        IssueKey);
+        grp.MapPost("/keys/issue",    IssueKey);
         grp.MapPost("/keys/{key}/revoke", RevokeKey);
-        grp.MapGet ("/keys",              ListKeys);
-        grp.MapGet ("/keys/{key}",        KeyDetails);
+        grp.MapGet ("/keys",           ListKeys);
+        grp.MapGet ("/keys/{key}",     KeyDetails);
     }
 
     // -------- ISSUE --------
-
     public class IssueKeyRequest
     {
         public string Email { get; set; } = "";
@@ -61,7 +62,6 @@ public static class AdminEndpoints
         public int? Days { get; set; }
         public string? Notes { get; set; }
     }
-
     public class IssueKeyResponse
     {
         public bool Ok { get; set; }
@@ -70,31 +70,25 @@ public static class AdminEndpoints
         public string Plan { get; set; } = "";
         public DateTime? ExpiresAt { get; set; }
     }
-
-    // === NOWPAY: REFACTORED - delegates to LicensingService ===
-    // Previously this method contained the inline logic to generate a key
-    // and insert a License row. That logic now lives in LicensingService
-    // so the NowPayments webhook can call the same code path.
-    // External behavior (request shape, response shape, status codes) is UNCHANGED.
     private static async Task<IResult> IssueKey(
-        [FromBody] IssueKeyRequest req,
-        LicensingService licensing,
-        LicensingDbContext db)
+        [FromBody] IssueKeyRequest req, LicensingDbContext db)
     {
         if (string.IsNullOrWhiteSpace(req.Email))
             return Results.BadRequest(new { error = "Email required" });
         if (string.IsNullOrWhiteSpace(req.Plan))
             return Results.BadRequest(new { error = "Plan required" });
 
-        var key = await licensing.IssueKeyAsync(
-            email: req.Email,
-            plan: req.Plan,
-            days: req.Days,
-            notes: req.Notes);
-
-        // Re-read the row to surface ExpiresAt (set inside LicensingService)
-        var lic = await db.Licenses.AsNoTracking()
-            .FirstAsync(l => l.LicenseKey == key);
+        var key = GenerateLicenseKey(req.Plan);
+        var lic = new License
+        {
+            LicenseKey = key,
+            Email      = req.Email.Trim(),
+            Plan       = req.Plan,
+            ExpiresAt  = (req.Days is > 0) ? DateTime.UtcNow.AddDays(req.Days.Value) : null,
+            Notes      = req.Notes,
+        };
+        db.Licenses.Add(lic);
+        await db.SaveChangesAsync();
 
         return Results.Ok(new IssueKeyResponse
         {
@@ -107,9 +101,7 @@ public static class AdminEndpoints
     }
 
     // -------- REVOKE --------
-
     public class RevokeRequest { public string? Reason { get; set; } }
-
     private static async Task<IResult> RevokeKey(
         string key, [FromBody] RevokeRequest? body, LicensingDbContext db)
     {
@@ -119,13 +111,11 @@ public static class AdminEndpoints
         lic.Revoked = true;
         lic.RevokedAt = DateTime.UtcNow;
         lic.RevokedReason = body?.Reason ?? "Revoked by admin";
-
         await db.SaveChangesAsync();
         return Results.Ok(new { ok = true, revokedAt = lic.RevokedAt });
     }
 
     // -------- LIST --------
-
     private static async Task<IResult> ListKeys(LicensingDbContext db)
     {
         var rows = await db.Licenses
@@ -145,7 +135,6 @@ public static class AdminEndpoints
     }
 
     // -------- DETAILS --------
-
     private static async Task<IResult> KeyDetails(string key, LicensingDbContext db)
     {
         var lic = await db.Licenses
@@ -174,7 +163,27 @@ public static class AdminEndpoints
 
     // -------- HELPERS --------
 
-    // GenerateLicenseKey was REMOVED - logic moved to LicensingService.
+    /// <summary>Generate a customer-friendly license key.</summary>
+    private static string GenerateLicenseKey(string plan)
+    {
+        const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
+        var planTag = plan.ToUpperInvariant();
+        if (planTag.Length > 4) planTag = planTag[..4];
+
+        var rng = RandomNumberGenerator.Create();
+        var sb = new StringBuilder("LTC-").Append(planTag);
+        for (int g = 0; g < 3; g++)
+        {
+            sb.Append('-');
+            for (int c = 0; c < 4; c++)
+            {
+                var buf = new byte[1];
+                rng.GetBytes(buf);
+                sb.Append(alphabet[buf[0] % alphabet.Length]);
+            }
+        }
+        return sb.ToString();
+    }
 
     private static bool CryptographicEquals(string a, string b)
     {

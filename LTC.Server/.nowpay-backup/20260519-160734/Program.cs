@@ -20,6 +20,7 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     Log.Information("Starting Limitless activation server");
+
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog();
 
@@ -39,29 +40,14 @@ try
     // Email alerts (loads SMTP config; no-ops gracefully if unset)
     builder.Services.AddSingleton<EmailAlertService>();
 
-    // === NOWPAY: BEGIN - new services for crypto checkout ===
-    // Configuration binding: env vars NowPayments__ApiKey, NowPayments__IpnSecret
-    builder.Services.Configure<NowPaymentsOptions>(
-        builder.Configuration.GetSection("NowPayments"));
-    // Configuration binding: env vars Resend__ApiKey, Resend__FromEmail, etc.
-    builder.Services.Configure<ResendOptions>(
-        builder.Configuration.GetSection("Resend"));
-
-    // HttpClient-backed services — registered as typed HttpClient consumers
-    // so .NET handles pooling + DNS refresh correctly.
-    builder.Services.AddHttpClient<NowPaymentsClient>();
-    builder.Services.AddHttpClient<EmailService>();
-
-    // Scoped services that share the DbContext
-    builder.Services.AddScoped<OrderService>();
-    builder.Services.AddScoped<LicensingService>();
-    // === NOWPAY: END ===
-
     // Rate limiting — built into ASP.NET Core 8. Each policy is
-    // attached to specific endpoints below.
+    // attached to specific endpoints below. The defaults below allow
+    // normal customer traffic; aggressive on the activation path
+    // (a single IP shouldn't be activating 100 licenses an hour).
     builder.Services.AddRateLimiter(opts =>
     {
-        // "customer" policy — applies to /activate, /heartbeat, /deactivate
+        // "customer" policy — applies to /activate, /heartbeat, /deactivate.
+        // 60 requests per minute per IP, ~1 every second sustained.
         opts.AddPolicy("customer", http =>
         {
             var xff = http.Request.Headers["X-Forwarded-For"].FirstOrDefault();
@@ -77,47 +63,8 @@ try
                     QueueLimit = 0,
                 });
         });
-
-        // === NOWPAY: BEGIN - rate limit for checkout creation ===
-        // "checkout" policy - 10 invoices per minute per IP. Anti-abuse.
-        // Webhook endpoint is NOT rate-limited (NowPayments controls retry).
-        opts.AddPolicy("checkout", http =>
-        {
-            var xff = http.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-            var partitionKey = !string.IsNullOrWhiteSpace(xff)
-                ? xff.Split(',')[0].Trim()
-                : (http.Connection.RemoteIpAddress?.ToString() ?? "unknown");
-            return RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: partitionKey,
-                factory: _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 10,
-                    Window = TimeSpan.FromMinutes(1),
-                    QueueLimit = 0,
-                });
-        });
-        // === NOWPAY: END ===
-
         opts.RejectionStatusCode = 429;
     });
-
-    // === NOWPAY: BEGIN - CORS for landing page calls ===
-    // The landing page at https://limitlesscopier.com calls /api/checkout/create
-    // and /api/checkout/status/* directly from the browser. Allow it.
-    builder.Services.AddCors(opts =>
-    {
-        opts.AddPolicy("landing", policy =>
-        {
-            policy.WithOrigins(
-                    "https://limitlesscopier.com",
-                    "https://www.limitlesscopier.com",
-                    "http://localhost:3000",      // local dev
-                    "http://localhost:5500")      // local dev
-                  .AllowAnyMethod()
-                  .AllowAnyHeader();
-        });
-    });
-    // === NOWPAY: END ===
 
     // =========================================================
     // BUILD + PIPELINE
@@ -127,11 +74,8 @@ try
     app.UseSerilogRequestLogging();
     app.UseRateLimiter();
 
-    // === NOWPAY: BEGIN ===
-    app.UseCors("landing");
-    // === NOWPAY: END ===
-
-    // Auto-create / migrate DB on startup
+    // Auto-create / migrate DB on startup. For a project this small with
+    // SQLite, this is cleaner than separate migrate-on-deploy steps.
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<LicensingDbContext>();
@@ -146,23 +90,14 @@ try
     var customerGroup = app.MapGroup("").RequireRateLimiting("customer");
     customerGroup.MapCustomerEndpoints();
 
-    // Health check
+        // Health check � Railway probes this every 30 seconds to confirm
+    // the container is live. Anonymous, no rate limit, no auth.
     app.MapGet("/health", () => Results.Ok(new {
-        status = "ok",
-        time   = DateTime.UtcNow
+        status  = "ok",
+        time    = DateTime.UtcNow
     }));
 
     app.MapAdminEndpoints();   // bearer-protected; sets up its own group
-
-    // === NOWPAY: BEGIN - new endpoints ===
-    // Checkout creation has its own rate limit (10/min per IP).
-    var checkoutGroup = app.MapGroup("").RequireRateLimiting("checkout");
-    checkoutGroup.MapCheckoutEndpoints();
-
-    // Webhook is NOT rate-limited — NowPayments controls retry behavior.
-    // Signature verification provides authentication.
-    app.MapNowPaymentsWebhook();
-    // === NOWPAY: END ===
 
     Log.Information("Activation server listening");
     app.Run();

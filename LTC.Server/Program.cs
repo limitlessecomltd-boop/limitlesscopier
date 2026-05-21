@@ -138,6 +138,19 @@ try
         db.Database.EnsureCreated();
         Log.Information("Database ready at {Path}",
             app.Configuration["Database:Path"] ?? "licenses.db");
+
+        // === DASHBOARD: BEGIN ===
+        // EnsureCreated() does NOT add new tables to an EXISTING database.
+        // We need to add the 4 new tables (Affiliates, DiscountCodes,
+        // CodeRedemptions, Commissions) via raw CREATE TABLE IF NOT EXISTS
+        // SQL so existing deploys (like production) get the new tables on
+        // their next restart. See Services/SchemaUpgrade.cs for the SQL.
+        // Idempotent — safe to run on every startup.
+        var schemaLog = scope.ServiceProvider
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("SchemaUpgrade");
+        await SchemaUpgrade.RunAsync(db, schemaLog).ConfigureAwait(false);
+        // === DASHBOARD: END ===
     }
 
     // =========================================================

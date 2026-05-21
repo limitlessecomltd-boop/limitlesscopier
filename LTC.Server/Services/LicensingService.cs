@@ -14,6 +14,12 @@ namespace LTC.Server.Services;
 /// AdminEndpoints.IssueKey. That worked when there was only one caller,
 /// but now we have webhook-triggered minting too, and we don't want to
 /// duplicate the key generation + DB insert logic.
+///
+/// === DASHBOARD addition ===
+/// Every new license now also gets an empty Affiliate row created in the
+/// same transaction. The Affiliate.Code (slug) stays NULL until the
+/// customer claims it from the dashboard. This way every customer is
+/// implicitly an affiliate; they just have to claim a slug to start sharing.
 /// </summary>
 public class LicensingService
 {
@@ -28,6 +34,7 @@ public class LicensingService
 
     /// <summary>
     /// Issue a license. Persists to the Licenses table, returns the customer-facing key.
+    /// Also creates an empty Affiliate row for the license.
     /// </summary>
     public async Task<string> IssueKeyAsync(
         string email,
@@ -53,9 +60,26 @@ public class LicensingService
         };
 
         _db.Licenses.Add(lic);
+
+        // === DASHBOARD: BEGIN ===
+        // Every new license gets an Affiliate row. Code stays null until
+        // the customer claims it from the dashboard. Adding it inside the
+        // same SaveChangesAsync so it commits atomically with the License.
+        var affiliate = new Affiliate
+        {
+            LicenseId = lic.Id,        // works because lic.Id was set to a new Guid in the entity ctor
+            Code = null,
+            CodeClaimedAt = null,
+            TotalEarnedUsd = 0m,
+            TotalPaidUsd = 0m,
+            CreatedAt = DateTime.UtcNow,
+        };
+        _db.Affiliates.Add(affiliate);
+        // === DASHBOARD: END ===
+
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        _log.LogInformation("Issued license {Key} for {Email} (plan={Plan}, days={Days})",
+        _log.LogInformation("Issued license {Key} for {Email} (plan={Plan}, days={Days}) + affiliate slot",
             key, email, plan, days);
         return key;
     }

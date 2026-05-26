@@ -175,6 +175,8 @@ try
     }));
 
     app.MapAdminEndpoints();
+    // === ZIP 4: admin discount-code + commission management ===
+    app.MapAdminDiscountEndpoints();
 
     // === NOWPAY: BEGIN ===
     var checkoutGroup = app.MapGroup("").RequireRateLimiting("checkout");

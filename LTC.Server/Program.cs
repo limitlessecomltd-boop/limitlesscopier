@@ -111,8 +111,13 @@ try
     var app = builder.Build();
 
     app.UseSerilogRequestLogging();
-    app.UseRateLimiter();
+    // CORS MUST come before the rate limiter. Otherwise the rate-limiter /
+    // routing middleware rejects the browser's OPTIONS preflight with 405
+    // before CORS can answer it, and every cross-origin call from the
+    // limitlesscopier.com pages to api.limitlesscopier.com gets blocked.
+    app.UseRouting();
     app.UseCors("landing");
+    app.UseRateLimiter();
 
     // Auto-create / migrate DB on startup
     using (var scope = app.Services.CreateScope())

@@ -49,6 +49,9 @@ public static class AdminDiscountEndpoints
         grp.MapPost("/discounts/{id}/update",     UpdateDiscount);
         grp.MapGet ("/commissions",               ListCommissions);
         grp.MapPost("/commissions/{id}/mark-paid", MarkCommissionPaid);
+        // === Intelligent admin dashboard ===
+        grp.MapGet ("/overview",                  Overview);
+        grp.MapGet ("/users",                     ListUsers);
     }
 
     // ===================== DISCOUNTS =====================
@@ -229,6 +232,122 @@ public static class AdminDiscountEndpoints
 
         await db.SaveChangesAsync();
         return Results.Ok(new { ok = true, paidOutAt = now });
+    }
+
+    // ===================== OVERVIEW (intelligent dashboard) =====================
+
+    private static async Task<IResult> Overview(LicensingDbContext db)
+    {
+        var now = DateTime.UtcNow;
+        var h24 = now.AddHours(-24);
+        var d7  = now.AddDays(-7);
+        var d30 = now.AddDays(-30);
+        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        // ---- Licenses ----
+        var licTotal   = await db.Licenses.CountAsync();
+        var licRevoked = await db.Licenses.CountAsync(l => l.Revoked);
+        var licExpired = await db.Licenses.CountAsync(l => !l.Revoked && l.ExpiresAt != null && l.ExpiresAt < now);
+        var licActive  = licTotal - licRevoked - licExpired;
+
+        // ---- Active users (by heartbeat) ----
+        var activeNow   = await db.Activations.CountAsync(a => a.LastHeartbeatAt >= h24);
+        var active7d    = await db.Activations.CountAsync(a => a.LastHeartbeatAt >= d7);
+        var everActive  = await db.Activations.CountAsync();
+
+        // ---- Orders + revenue (paid orders only count as revenue) ----
+        var ordersTotal   = await db.Orders.CountAsync();
+        var ordersPaid    = await db.Orders.CountAsync(o => o.Status == "paid");
+        var ordersPending = await db.Orders.CountAsync(o => o.Status == "pending");
+
+        var paid = db.Orders.Where(o => o.Status == "paid");
+        var revAll   = await paid.SumAsync(o => (decimal?)o.AmountUsd) ?? 0m;
+        var rev30    = await paid.Where(o => o.PaidAt >= d30).SumAsync(o => (decimal?)o.AmountUsd) ?? 0m;
+        var revMonth = await paid.Where(o => o.PaidAt >= monthStart).SumAsync(o => (decimal?)o.AmountUsd) ?? 0m;
+
+        // Revenue by plan
+        var byPlanRaw = await paid
+            .GroupBy(o => o.Plan)
+            .Select(g => new { Plan = g.Key, Count = g.Count(), Revenue = g.Sum(x => x.AmountUsd) })
+            .ToListAsync();
+
+        var conversion = ordersTotal > 0 ? Math.Round((double)ordersPaid / ordersTotal * 100, 1) : 0;
+
+        // ---- Affiliates ----
+        var affTotal     = await db.Affiliates.CountAsync();
+        var affWithCode  = await db.Affiliates.CountAsync(a => a.Code != null);
+        var commOwed     = await db.Commissions.Where(c => c.Status == "earned").SumAsync(c => (decimal?)c.CommissionAmountUsd) ?? 0m;
+        var commPending  = await db.Commissions.Where(c => c.Status == "pending").SumAsync(c => (decimal?)c.CommissionAmountUsd) ?? 0m;
+        var commPaid     = await db.Commissions.Where(c => c.Status == "paid").SumAsync(c => (decimal?)c.CommissionAmountUsd) ?? 0m;
+
+        // Top affiliates by total earned
+        var topAff = await db.Affiliates
+            .Where(a => a.Code != null && a.TotalEarnedUsd > 0)
+            .OrderByDescending(a => a.TotalEarnedUsd)
+            .Take(5)
+            .Select(a => new { code = a.Code, earned = a.TotalEarnedUsd, paid = a.TotalPaidUsd })
+            .ToListAsync();
+
+        // ---- Discount codes ----
+        var dcTotal   = await db.DiscountCodes.CountAsync();
+        var dcActive  = await db.DiscountCodes.CountAsync(d => d.Enabled);
+        var dcRedeems = await db.DiscountCodes.SumAsync(d => (int?)d.UsedCount) ?? 0;
+
+        // ---- Recent activity ----
+        var recentOrders = await db.Orders
+            .Where(o => o.Status == "paid")
+            .OrderByDescending(o => o.PaidAt)
+            .Take(10)
+            .Select(o => new { o.Email, o.Plan, o.AmountUsd, o.PaidAt, o.AppliedCode })
+            .ToListAsync();
+
+        var recentActivations = await db.Activations
+            .OrderByDescending(a => a.FirstSeenAt)
+            .Take(10)
+            .Select(a => new { email = a.License.Email, a.MachineShort, a.FirstSeenAt, a.LastHeartbeatAt })
+            .ToListAsync();
+
+        return Results.Ok(new
+        {
+            licenses = new { total = licTotal, active = licActive, expired = licExpired, revoked = licRevoked },
+            activeUsers = new { last24h = activeNow, last7d = active7d, everActivated = everActive },
+            orders = new { total = ordersTotal, paid = ordersPaid, pending = ordersPending, conversionPct = conversion },
+            revenue = new { allTime = revAll, last30d = rev30, thisMonth = revMonth,
+                            byPlan = byPlanRaw.Select(x => new { plan = x.Plan, count = x.Count, revenue = x.Revenue }) },
+            affiliates = new { total = affTotal, withCode = affWithCode,
+                               owedUsd = commOwed, pendingUsd = commPending, paidUsd = commPaid, top = topAff },
+            discounts = new { total = dcTotal, active = dcActive, totalRedemptions = dcRedeems },
+            recentOrders,
+            recentActivations,
+            generatedAt = now,
+        });
+    }
+
+    // ===================== USERS (searchable) =====================
+
+    private static async Task<IResult> ListUsers(LicensingDbContext db)
+    {
+        var now = DateTime.UtcNow;
+        var rows = await db.Licenses
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(1000)
+            .Select(l => new
+            {
+                l.LicenseKey,
+                l.Email,
+                l.Plan,
+                l.CreatedAt,
+                l.ExpiresAt,
+                l.Revoked,
+                status = l.Revoked ? "revoked"
+                       : (l.ExpiresAt != null && l.ExpiresAt < now) ? "expired"
+                       : "active",
+                isActivated = (l.Activation != null),
+                machineShort = l.Activation != null ? l.Activation.MachineShort : null,
+                lastHeartbeatAt = l.Activation != null ? (DateTime?)l.Activation.LastHeartbeatAt : null,
+            })
+            .ToListAsync();
+        return Results.Ok(rows);
     }
 
     // ===================== HELPERS =====================

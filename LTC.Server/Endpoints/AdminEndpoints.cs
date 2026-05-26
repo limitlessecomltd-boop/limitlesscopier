@@ -37,6 +37,13 @@ public static class AdminEndpoints
         }
         var grp = app.MapGroup("/admin").AddEndpointFilter(async (ctx, next) =>
         {
+            // Let CORS preflight (OPTIONS) through untouched — the browser sends
+            // it with no Authorization header, and the CORS middleware must be
+            // allowed to answer it. Blocking it here with 401 breaks the preflight
+            // and the browser refuses the real request.
+            if (HttpMethods.IsOptions(ctx.HttpContext.Request.Method))
+                return await next(ctx);
+
             var auth = ctx.HttpContext.Request.Headers.Authorization.FirstOrDefault() ?? "";
             if (!auth.StartsWith("Bearer "))
                 return Results.Unauthorized();

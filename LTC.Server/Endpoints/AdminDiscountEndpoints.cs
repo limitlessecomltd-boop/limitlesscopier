@@ -35,6 +35,10 @@ public static class AdminDiscountEndpoints
 
         var grp = app.MapGroup("/admin").AddEndpointFilter(async (ctx, next) =>
         {
+            // Let CORS preflight (OPTIONS) through — see AdminEndpoints for why.
+            if (HttpMethods.IsOptions(ctx.HttpContext.Request.Method))
+                return await next(ctx);
+
             var auth = ctx.HttpContext.Request.Headers.Authorization.FirstOrDefault() ?? "";
             if (!auth.StartsWith("Bearer "))
                 return Results.Unauthorized();

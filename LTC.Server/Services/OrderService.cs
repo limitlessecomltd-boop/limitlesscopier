@@ -44,20 +44,42 @@ public class OrderService
     /// <summary>
     /// Create a new order in "pending" status. Returns the OrderId.
     /// </summary>
-    public async Task<Order> CreateAsync(string email, string plan, CancellationToken ct = default)
+    /// <summary>
+    /// Create a new order in "pending" status. Returns the Order.
+    ///
+    /// === ZIP 3 ===
+    /// Optional finalPriceUsd/appliedCode/discountAmountUsd let the checkout
+    /// endpoint pass a discounted price + the code that produced it. When
+    /// finalPriceUsd is null, falls back to the catalog price (the original
+    /// behaviour, so any other caller keeps working unchanged).
+    ///
+    /// IMPORTANT: finalPriceUsd is computed SERVER-SIDE by
+    /// CheckoutValidationService — never trust a price from the client.
+    /// </summary>
+    public async Task<Order> CreateAsync(
+        string email,
+        string plan,
+        decimal? finalPriceUsd = null,
+        string? appliedCode = null,
+        decimal discountAmountUsd = 0m,
+        CancellationToken ct = default)
     {
         if (!IsValidPlan(plan))
             throw new ArgumentException($"Unknown plan: {plan}", nameof(plan));
+
+        var amount = finalPriceUsd ?? GetPrice(plan);
 
         var order = new Order
         {
             OrderId = GenerateOrderId(),
             Email = email.Trim(),
             Plan = plan,
-            AmountUsd = GetPrice(plan),
+            AmountUsd = amount,
             PayCurrency = "usdttrc20",
             Status = "pending",
             CreatedAt = DateTime.UtcNow,
+            AppliedCode = string.IsNullOrWhiteSpace(appliedCode) ? null : appliedCode,
+            DiscountAmountUsd = discountAmountUsd,
         };
 
         _db.Orders.Add(order);

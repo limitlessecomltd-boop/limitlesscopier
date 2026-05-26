@@ -35,7 +35,11 @@ public class Order
     /// <summary>"1month" | "3months" | "yearly"</summary>
     public string Plan { get; set; } = "";
 
-    /// <summary>Price quoted in USD (50, 120, or 300).</summary>
+    /// <summary>
+    /// Price quoted in USD. This is the FINAL price the customer pays,
+    /// i.e. catalog price MINUS any discount. For affiliate codes (which
+    /// give no discount) this equals the catalog price.
+    /// </summary>
     public decimal AmountUsd { get; set; }
 
     /// <summary>Currency the customer pays in. Always "usdttrc20" for now.</summary>
@@ -69,4 +73,24 @@ public class Order
 
     /// <summary>Last webhook received timestamp.</summary>
     public DateTime? LastWebhookAt { get; set; }
+
+    // === ZIP 3: BEGIN - discount/affiliate code fields ===
+
+    /// <summary>
+    /// The literal code the customer typed at checkout (uppercased), or null
+    /// if none. Could be a discount code OR an affiliate code. We resolve
+    /// which it is at webhook-paid time to write the right redemption/commission row.
+    /// Stored even for affiliate codes (which give no discount) so the webhook
+    /// handler knows to credit a commission.
+    /// </summary>
+    public string? AppliedCode { get; set; }
+
+    /// <summary>
+    /// Discount applied to this order in USD. 0 for affiliate codes or no code.
+    /// AmountUsd already reflects this subtraction; this field is kept for audit
+    /// (so we can see "catalog was $120, discount $24, paid $96").
+    /// </summary>
+    public decimal DiscountAmountUsd { get; set; }
+
+    // === ZIP 3: END ===
 }

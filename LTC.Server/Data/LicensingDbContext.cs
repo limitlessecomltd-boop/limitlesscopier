@@ -89,6 +89,10 @@ public class LicensingDbContext : DbContext
             e.Property(x => x.PayCurrency).HasMaxLength(20);
             e.Property(x => x.Status).HasMaxLength(20).IsRequired();
             e.Property(x => x.LicenseKey).HasMaxLength(40);
+            // === ZIP 3: new Order columns ===
+            e.Property(x => x.AppliedCode).HasMaxLength(32);
+            e.Property(x => x.DiscountAmountUsd).HasPrecision(18, 2);
+            // === ZIP 3: END ===
             e.HasIndex(x => x.Email);
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.CreatedAt);

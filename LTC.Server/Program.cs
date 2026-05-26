@@ -48,6 +48,10 @@ try
 
     // === DASHBOARD: BEGIN ===
     builder.Services.AddScoped<AffiliateService>();
+    // === ZIP 3: BEGIN ===
+    builder.Services.AddScoped<CheckoutValidationService>();
+    builder.Services.AddScoped<CommissionService>();
+    // === ZIP 3: END ===
     // === DASHBOARD: END ===
 
     builder.Services.AddRateLimiter(opts =>

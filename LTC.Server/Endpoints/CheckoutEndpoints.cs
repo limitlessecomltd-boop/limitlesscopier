@@ -30,12 +30,41 @@ public static class CheckoutEndpoints
 
         routes.MapGet("/api/checkout/status/{orderId}", GetStatus)
               .WithName("GetCheckoutStatus");
+
+        // === ZIP 3 ===
+        routes.MapPost("/api/checkout/validate-code", ValidateCode)
+              .WithName("ValidateCheckoutCode");
     }
+
+    // === ZIP 3: BEGIN ===
+    private static async Task<IResult> ValidateCode(
+        [FromBody] ValidateCodeRequest req,
+        CheckoutValidationService validator,
+        CancellationToken ct)
+    {
+        if (!OrderService.IsValidPlan(req.Plan))
+            return Results.BadRequest(new { error = "Unknown plan" });
+
+        var r = await validator.ValidateAsync(req.Code, req.Plan, buyerEmail: null, ct)
+                               .ConfigureAwait(false);
+
+        return Results.Ok(new ValidateCodeResponse
+        {
+            Valid = r.Valid,
+            Kind = r.Kind,
+            OriginalPriceUsd = r.OriginalPriceUsd,
+            DiscountAmountUsd = r.DiscountAmountUsd,
+            FinalPriceUsd = r.FinalPriceUsd,
+            Message = r.Message,
+        });
+    }
+    // === ZIP 3: END ===
 
     private static async Task<IResult> CreateCheckout(
         [FromBody] CreateCheckoutRequest req,
         OrderService orders,
         NowPaymentsClient nowPay,
+        CheckoutValidationService validator,
         IConfiguration config,
         CancellationToken ct)
     {
@@ -45,9 +74,27 @@ public static class CheckoutEndpoints
         if (!OrderService.IsValidPlan(req.Plan))
             return Results.BadRequest(new { error = "Unknown plan" });
 
+        // === ZIP 3: validate code server-side. Invalid codes don't block the
+        // sale — validator returns "none"/full-price in that case, EXCEPT for
+        // self-referral which we surface as an error so the affiliate notices.
+        var validation = await validator.ValidateAsync(req.Code, req.Plan, req.Email, ct)
+                                        .ConfigureAwait(false);
+        // The only validation failure we hard-reject is self-referral; everything
+        // else just falls back to full price (NormalizedCode == null).
+        if (!validation.Valid &&
+            validation.Message.Contains("your own", StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.BadRequest(new { error = validation.Message });
+        }
+
         // 1. Persist the order (we need the id BEFORE creating the invoice
         //    so we can stamp it as ipn_callback_url metadata)
-        var order = await orders.CreateAsync(req.Email, req.Plan, ct).ConfigureAwait(false);
+        var order = await orders.CreateAsync(
+            req.Email, req.Plan,
+            finalPriceUsd: validation.FinalPriceUsd,
+            appliedCode: validation.NormalizedCode,
+            discountAmountUsd: validation.DiscountAmountUsd,
+            ct: ct).ConfigureAwait(false);
 
         // 2. Resolve the URLs that NowPayments needs to know about
         var apiBase = config["Public:ApiBaseUrl"]
@@ -104,6 +151,8 @@ public static class CheckoutEndpoints
             InvoiceUrl = invoice.InvoiceUrl,
             Plan = order.Plan,
             AmountUsd = order.AmountUsd,
+            AppliedCode = order.AppliedCode,
+            DiscountAmountUsd = order.DiscountAmountUsd,
         });
     }
 

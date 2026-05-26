@@ -12,37 +12,22 @@ namespace LTC.Server.Services;
 ///   context, those tables won't materialize on existing deployments
 ///   (like the production server) — only on a fresh empty DB.
 ///
-///   We don't want to switch to proper EF migrations right now because:
-///     1. The existing DB has no __EFMigrationsHistory entries (it was
-///        created by EnsureCreated). Adding migrations from this state
-///        requires a delicate dance — manual INSERT into __EFMigrationsHistory
-///        to mark the baseline as applied, otherwise the next migration
-///        tries to re-create the Licenses table and crashes.
-///     2. Migrations tooling has to be installed everywhere we deploy
-///        (Railway build container, dev box, etc.).
-///
 ///   Instead: idempotent raw SQL. Each CREATE TABLE IF NOT EXISTS no-ops
 ///   if the table already exists; same for indexes. Safe to run on every
-///   startup. When we eventually move to proper migrations, we baseline
-///   the current schema (including these tables) and these CREATE
-///   statements become dead code we can delete.
+///   startup.
 ///
-/// SQLite specifics:
-///   - TEXT for strings (any length cap is informational, not enforced)
-///   - REAL for decimals (we store with HasPrecision in the model but
-///     SQLite ignores that — REAL is double-precision, fine for $0.01
-///     resolution within sensible amount ranges)
-///   - INTEGER for ints
-///   - TEXT for DateTime (EF Core stores them as ISO 8601 strings)
-///   - TEXT for Guid (EF Core stores them as text with hyphens by default)
+/// === Zip 3 addition ===
+///   Adds two columns to the existing Orders table:
+///     - AppliedCode      (TEXT, nullable) - the literal code typed by buyer
+///     - DiscountAmountUsd (TEXT/decimal)   - discount in USD (0 if affiliate or no code)
+///   SQLite supports ALTER TABLE ADD COLUMN. Older SQLite (pre-3.35) doesn't
+///   support IF NOT EXISTS on ALTER, so we wrap in try/catch — duplicate-column
+///   error on subsequent runs is logged and ignored.
 /// </summary>
 public static class SchemaUpgrade
 {
     public static async Task RunAsync(LicensingDbContext db, ILogger log, CancellationToken ct = default)
     {
-        // Each statement is its own ExecuteSqlRawAsync call. SQLite doesn't
-        // support multi-statement strings via the EF provider in all cases,
-        // so we send them one at a time. Slight overhead, much clearer errors.
         var statements = new[]
         {
             // --- Affiliates ---
@@ -112,9 +97,18 @@ public static class SchemaUpgrade
             @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Commissions_OrderId"" ON ""Commissions"" (""OrderId"");",
             @"CREATE INDEX IF NOT EXISTS ""IX_Commissions_Status"" ON ""Commissions"" (""Status"");",
             @"CREATE INDEX IF NOT EXISTS ""IX_Commissions_EligibleAt"" ON ""Commissions"" (""EligibleAt"");",
+
+            // === ZIP 3 ADDITIONS ===
+            // Two new columns on existing Orders table. ALTER TABLE without IF NOT EXISTS
+            // (older SQLite doesn't support it). On second+ runs these will throw
+            // "duplicate column name: ..." which the try/catch in the loop below
+            // turns into a logged warning, not a startup failure.
+            @"ALTER TABLE ""Orders"" ADD COLUMN ""AppliedCode"" TEXT NULL;",
+            @"ALTER TABLE ""Orders"" ADD COLUMN ""DiscountAmountUsd"" TEXT NOT NULL DEFAULT '0';",
         };
 
         int applied = 0;
+        int skipped = 0;
         foreach (var sql in statements)
         {
             try
@@ -124,13 +118,24 @@ public static class SchemaUpgrade
             }
             catch (Exception ex)
             {
-                // Don't kill startup — log and continue. A failure on a CREATE IF NOT EXISTS
-                // basically only happens if SQLite version is ancient or DB file is locked.
-                log.LogError(ex, "SchemaUpgrade statement failed (continuing): {Sql}",
-                    sql.Substring(0, Math.Min(60, sql.Length)));
+                // For the ALTER TABLE statements on second runs, this catches
+                // "duplicate column name" — log as Info, not Error. For genuine
+                // SQL problems, the message will tell us what went wrong.
+                if (ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase))
+                {
+                    log.LogInformation("SchemaUpgrade skip (already applied): {Sql}",
+                        sql.Substring(0, Math.Min(80, sql.Length)));
+                    skipped++;
+                }
+                else
+                {
+                    log.LogError(ex, "SchemaUpgrade statement failed (continuing): {Sql}",
+                        sql.Substring(0, Math.Min(80, sql.Length)));
+                }
             }
         }
 
-        log.LogInformation("SchemaUpgrade complete: {Applied}/{Total} statements OK", applied, statements.Length);
+        log.LogInformation("SchemaUpgrade complete: {Applied} applied, {Skipped} already-present, {Total} total",
+            applied, skipped, statements.Length);
     }
 }

@@ -34,6 +34,7 @@ public static class NowPaymentsWebhookEndpoint
         OrderService orders,
         EmailService email,
         LicensingService licensing,
+        CommissionService commissions,
         ILoggerFactory logFactory,
         CancellationToken ct)
     {
@@ -141,6 +142,21 @@ public static class NowPaymentsWebhookEndpoint
         //    if email fails, we don't keep re-minting on retries - we just retry
         //    the email.
         await orders.MarkLicenseIssuedAsync(order.OrderId, licenseKey, ct).ConfigureAwait(false);
+
+        // === ZIP 3: record code redemption + affiliate commission (if any).
+        // Wrapped so a bookkeeping failure never blocks license delivery — the
+        // license is already minted and that's what the customer paid for.
+        // CommissionService is idempotent, so a webhook retry re-runs it safely.
+        try
+        {
+            await commissions.RecordForPaidOrderAsync(order, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Commission/redemption recording failed for order {OrderId} " +
+                             "(license still delivered; reconcile manually)", order.OrderId);
+        }
+        // === ZIP 3: END ===
 
         var sent = await email.SendLicenseEmailAsync(
             order.Email, licenseKey, order.Plan, order.AmountUsd, ct).ConfigureAwait(false);

@@ -92,9 +92,16 @@ public static class DashboardEndpoints
             .ToListAsync(ct).ConfigureAwait(false);
 
         // Pending balance = sum of earned but not yet paid.
-        var pendingBalance = await db.Commissions
+        // NOTE: decimals are stored as TEXT in SQLite, and SQLite cannot run
+        // SUM() over a TEXT-backed decimal column — SumAsync throws at the DB.
+        // So we pull the amounts into memory and sum with LINQ-to-Objects,
+        // which uses EF's value converter on materialization. Safe and small
+        // (an affiliate's earned-unpaid set is tiny).
+        var earnedAmounts = await db.Commissions
             .Where(c => c.AffiliateId == affiliate.Id && c.Status == "earned")
-            .SumAsync(c => (decimal?)c.CommissionAmountUsd, ct).ConfigureAwait(false) ?? 0m;
+            .Select(c => c.CommissionAmountUsd)
+            .ToListAsync(ct).ConfigureAwait(false);
+        var pendingBalance = earnedAmounts.Sum();
 
         // Count referrals = how many sales used this code, regardless of status.
         var totalReferrals = await db.Commissions

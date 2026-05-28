@@ -265,32 +265,46 @@ public static class AdminDiscountEndpoints
         var ordersPending = await db.Orders.CountAsync(o => o.Status == "pending");
 
         var paid = db.Orders.Where(o => o.Status == "paid");
-        var revAll   = await paid.SumAsync(o => (decimal?)o.AmountUsd) ?? 0m;
-        var rev30    = await paid.Where(o => o.PaidAt >= d30).SumAsync(o => (decimal?)o.AmountUsd) ?? 0m;
-        var revMonth = await paid.Where(o => o.PaidAt >= monthStart).SumAsync(o => (decimal?)o.AmountUsd) ?? 0m;
-
-        // Revenue by plan
-        var byPlanRaw = await paid
-            .GroupBy(o => o.Plan)
-            .Select(g => new { Plan = g.Key, Count = g.Count(), Revenue = g.Sum(x => x.AmountUsd) })
+        // SQLite stores decimals as TEXT and cannot SUM() them in SQL, so we
+        // materialize the amounts (with their paid dates) and aggregate in memory.
+        var paidAmounts = await paid
+            .Select(o => new { o.AmountUsd, o.PaidAt, o.Plan })
             .ToListAsync();
+        var revAll   = paidAmounts.Sum(x => x.AmountUsd);
+        var rev30    = paidAmounts.Where(x => x.PaidAt >= d30).Sum(x => x.AmountUsd);
+        var revMonth = paidAmounts.Where(x => x.PaidAt >= monthStart).Sum(x => x.AmountUsd);
+
+        // Revenue by plan (in memory, same reason)
+        var byPlanRaw = paidAmounts
+            .GroupBy(x => x.Plan)
+            .Select(g => new { Plan = g.Key, Count = g.Count(), Revenue = g.Sum(x => x.AmountUsd) })
+            .ToList();
 
         var conversion = ordersTotal > 0 ? Math.Round((double)ordersPaid / ordersTotal * 100, 1) : 0;
 
         // ---- Affiliates ----
         var affTotal     = await db.Affiliates.CountAsync();
         var affWithCode  = await db.Affiliates.CountAsync(a => a.Code != null);
-        var commOwed     = await db.Commissions.Where(c => c.Status == "earned").SumAsync(c => (decimal?)c.CommissionAmountUsd) ?? 0m;
-        var commPending  = await db.Commissions.Where(c => c.Status == "pending").SumAsync(c => (decimal?)c.CommissionAmountUsd) ?? 0m;
-        var commPaid     = await db.Commissions.Where(c => c.Status == "paid").SumAsync(c => (decimal?)c.CommissionAmountUsd) ?? 0m;
+        // Commission totals by status — materialize then sum (SQLite TEXT decimals).
+        var commByStatus = await db.Commissions
+            .Select(c => new { c.Status, c.CommissionAmountUsd })
+            .ToListAsync();
+        var commOwed    = commByStatus.Where(c => c.Status == "earned").Sum(c => c.CommissionAmountUsd);
+        var commPending = commByStatus.Where(c => c.Status == "pending").Sum(c => c.CommissionAmountUsd);
+        var commPaid    = commByStatus.Where(c => c.Status == "paid").Sum(c => c.CommissionAmountUsd);
 
         // Top affiliates by total earned
-        var topAff = await db.Affiliates
-            .Where(a => a.Code != null && a.TotalEarnedUsd > 0)
-            .OrderByDescending(a => a.TotalEarnedUsd)
-            .Take(5)
+        // Top affiliates by total earned. Decimal filter/order can't run in
+        // SQLite (TEXT-stored), so materialize the small with-code set first.
+        var affWithCodeRows = await db.Affiliates
+            .Where(a => a.Code != null)
             .Select(a => new { code = a.Code, earned = a.TotalEarnedUsd, paid = a.TotalPaidUsd })
             .ToListAsync();
+        var topAff = affWithCodeRows
+            .Where(a => a.earned > 0)
+            .OrderByDescending(a => a.earned)
+            .Take(5)
+            .ToList();
 
         // ---- Discount codes ----
         var dcTotal   = await db.DiscountCodes.CountAsync();

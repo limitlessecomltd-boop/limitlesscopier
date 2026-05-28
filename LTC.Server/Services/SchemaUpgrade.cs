@@ -105,6 +105,28 @@ public static class SchemaUpgrade
             // turns into a logged warning, not a startup failure.
             @"ALTER TABLE ""Orders"" ADD COLUMN ""AppliedCode"" TEXT NULL;",
             @"ALTER TABLE ""Orders"" ADD COLUMN ""DiscountAmountUsd"" TEXT NOT NULL DEFAULT '0';",
+
+            // === PAYOUT: affiliate payout requests + global settings ===
+            @"CREATE TABLE IF NOT EXISTS ""PayoutRequests"" (
+                ""Id""             TEXT     NOT NULL CONSTRAINT ""PK_PayoutRequests"" PRIMARY KEY,
+                ""AffiliateId""     TEXT     NOT NULL,
+                ""AmountUsd""       TEXT     NOT NULL DEFAULT '0',
+                ""Status""          TEXT     NOT NULL DEFAULT 'requested',
+                ""PayoutDetails""   TEXT     NULL,
+                ""RequestedAt""     TEXT     NOT NULL,
+                ""PaidAt""          TEXT     NULL,
+                ""RejectedAt""      TEXT     NULL,
+                ""AdminNotes""      TEXT     NULL,
+                CONSTRAINT ""FK_PayoutRequests_Affiliates_AffiliateId""
+                    FOREIGN KEY (""AffiliateId"") REFERENCES ""Affiliates"" (""Id"") ON DELETE CASCADE
+            );",
+            @"CREATE INDEX IF NOT EXISTS ""IX_PayoutRequests_AffiliateId"" ON ""PayoutRequests"" (""AffiliateId"");",
+            @"CREATE INDEX IF NOT EXISTS ""IX_PayoutRequests_Status"" ON ""PayoutRequests"" (""Status"");",
+            @"CREATE TABLE IF NOT EXISTS ""AppSettings"" (
+                ""Key""        TEXT     NOT NULL CONSTRAINT ""PK_AppSettings"" PRIMARY KEY,
+                ""Value""      TEXT     NULL,
+                ""UpdatedAt""  TEXT     NOT NULL DEFAULT '1970-01-01 00:00:00'
+            );",
         };
 
         int applied = 0;

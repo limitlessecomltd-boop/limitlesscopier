@@ -27,6 +27,7 @@ public static class DashboardEndpoints
         routes.MapGet ("/api/dashboard/{licenseKey}",                  GetDashboard)        .WithName("GetDashboard");
         routes.MapPost("/api/dashboard/{licenseKey}/claim-code",       ClaimAffiliateCode)  .WithName("ClaimAffiliateCode");
         routes.MapPost("/api/dashboard/{licenseKey}/resend-license",   ResendLicenseEmail)  .WithName("ResendLicenseEmail");
+        routes.MapPost("/api/dashboard/{licenseKey}/request-payout",    RequestPayout)       .WithName("RequestPayout");
         return routes;
     }
 
@@ -103,6 +104,15 @@ public static class DashboardEndpoints
             .ToListAsync(ct).ConfigureAwait(false);
         var pendingBalance = earnedAmounts.Sum();
 
+        // === PAYOUT: is there an open (requested, not yet paid/rejected) payout? ===
+        var openPayout = await db.PayoutRequests
+            .Where(p => p.AffiliateId == affiliate.Id && p.Status == "requested")
+            .OrderByDescending(p => p.RequestedAt)
+            .Select(p => new { p.Id, p.AmountUsd, p.RequestedAt, p.Status })
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        const decimal payoutThreshold = 50m;
+        var canRequestPayout = openPayout is null && pendingBalance >= payoutThreshold;
+
         // Count referrals = how many sales used this code, regardless of status.
         var totalReferrals = await db.Commissions
             .CountAsync(c => c.AffiliateId == affiliate.Id, ct).ConfigureAwait(false);
@@ -146,7 +156,9 @@ public static class DashboardEndpoints
                 pendingBalanceUsd = pendingBalance,
                 totalReferrals,
                 payoutThresholdUsd = 50m,
-                payoutInstructions = "Email admin@limitlesscopier.com from your registered address when your earned balance reaches $50. We pay via USDT TRC20 or bank transfer."
+                canRequestPayout,
+                openPayoutRequest = openPayout,
+                payoutInstructions = "Request a payout once your earned balance reaches $50. We pay via USDT TRC20 or bank transfer after review."
             },
             recentReferrals = recentCommissions,
         });
@@ -243,6 +255,73 @@ public static class DashboardEndpoints
             ok = true,
             message = "License key has been emailed to the address on file."
         });
+    }
+
+    // =========================================================
+    // POST /api/dashboard/{licenseKey}/request-payout
+    // =========================================================
+
+    public sealed class RequestPayoutRequest
+    {
+        public string? PayoutDetails { get; set; }
+    }
+
+    private static async Task<IResult> RequestPayout(
+        string licenseKey,
+        RequestPayoutRequest? body,
+        LicensingDbContext db,
+        ILoggerFactory logFactory,
+        CancellationToken ct)
+    {
+        var log = logFactory.CreateLogger("RequestPayoutEndpoint");
+        if (string.IsNullOrWhiteSpace(licenseKey))
+            return Results.BadRequest(new { error = "license key required" });
+
+        const decimal payoutThreshold = 50m;
+
+        var key = licenseKey.Trim().ToUpperInvariant();
+        var lic = await db.Licenses
+            .Where(l => l.LicenseKey == key)
+            .Select(l => new { l.Id, l.Revoked })
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (lic is null) return Results.NotFound(new { error = "license not found" });
+        if (lic.Revoked) return Results.BadRequest(new { error = "this license has been revoked" });
+
+        var affiliate = await db.Affiliates.FirstOrDefaultAsync(a => a.LicenseId == lic.Id, ct).ConfigureAwait(false);
+        if (affiliate is null) return Results.BadRequest(new { error = "no affiliate account for this license" });
+
+        // Reject if there's already an open request (prevents double-requests).
+        var hasOpen = await db.PayoutRequests
+            .AnyAsync(p => p.AffiliateId == affiliate.Id && p.Status == "requested", ct).ConfigureAwait(false);
+        if (hasOpen)
+            return Results.BadRequest(new { error = "You already have a payout request pending review." });
+
+        // Recompute earned-unpaid balance SERVER-SIDE — never trust a client amount.
+        var earnedAmounts = await db.Commissions
+            .Where(c => c.AffiliateId == affiliate.Id && c.Status == "earned")
+            .Select(c => c.CommissionAmountUsd)
+            .ToListAsync(ct).ConfigureAwait(false);
+        var balance = earnedAmounts.Sum();
+
+        if (balance < payoutThreshold)
+            return Results.BadRequest(new { error = $"You need at least ${payoutThreshold:0.##} in earned balance to request a payout. Current: ${balance:0.##}." });
+
+        var details = body?.PayoutDetails?.Trim();
+        if (details is { Length: > 256 }) details = details.Substring(0, 256);
+
+        var req = new PayoutRequest
+        {
+            AffiliateId = affiliate.Id,
+            AmountUsd = balance,
+            Status = "requested",
+            PayoutDetails = details,
+            RequestedAt = DateTime.UtcNow,
+        };
+        db.PayoutRequests.Add(req);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        log.LogInformation("Payout requested: affiliate {Aff} amount ${Amt}", affiliate.Id, balance);
+        return Results.Ok(new { ok = true, amountUsd = balance, requestedAt = req.RequestedAt });
     }
 
     // =========================================================

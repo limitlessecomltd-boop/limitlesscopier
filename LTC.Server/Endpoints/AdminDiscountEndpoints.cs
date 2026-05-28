@@ -56,6 +56,12 @@ public static class AdminDiscountEndpoints
         // === Intelligent admin dashboard ===
         grp.MapGet ("/overview",                  Overview);
         grp.MapGet ("/users",                     ListUsers);
+        // === PAYOUT + settings ===
+        grp.MapGet ("/payouts",                   ListPayouts);
+        grp.MapPost("/payouts/{id}/mark-paid",    MarkPayoutPaid);
+        grp.MapPost("/payouts/{id}/reject",       RejectPayout);
+        grp.MapGet ("/settings/affiliate-discount",  GetAffiliateDiscount);
+        grp.MapPost("/settings/affiliate-discount",  SetAffiliateDiscount);
     }
 
     // ===================== DISCOUNTS =====================
@@ -366,6 +372,142 @@ public static class AdminDiscountEndpoints
             })
             .ToListAsync();
         return Results.Ok(rows);
+    }
+
+    // ===================== PAYOUTS =====================
+
+    private static async Task<IResult> ListPayouts(LicensingDbContext db)
+    {
+        var rows = await db.PayoutRequests
+            .OrderByDescending(p => p.RequestedAt)
+            .Take(500)
+            .Select(p => new
+            {
+                p.Id,
+                p.AmountUsd,
+                p.Status,
+                p.PayoutDetails,
+                p.RequestedAt,
+                p.PaidAt,
+                p.RejectedAt,
+                p.AdminNotes,
+                affiliateCode = db.Affiliates.Where(a => a.Id == p.AffiliateId).Select(a => a.Code).FirstOrDefault(),
+                affiliateEmail = db.Affiliates.Where(a => a.Id == p.AffiliateId).Select(a => a.License.Email).FirstOrDefault(),
+            })
+            .ToListAsync();
+        return Results.Ok(rows);
+    }
+
+    public class PayoutActionRequest { public string? Notes { get; set; } }
+
+    private static async Task<IResult> MarkPayoutPaid(
+        string id,
+        [FromBody] PayoutActionRequest? body,
+        LicensingDbContext db)
+    {
+        if (!Guid.TryParse(id, out var guid))
+            return Results.BadRequest(new { error = "Bad id" });
+
+        var pr = await db.PayoutRequests.FirstOrDefaultAsync(x => x.Id == guid);
+        if (pr is null) return Results.NotFound();
+        if (pr.Status != "requested")
+            return Results.BadRequest(new { error = $"Payout is '{pr.Status}', only 'requested' can be paid." });
+
+        var now = DateTime.UtcNow;
+
+        // Mark all of this affiliate's EARNED commissions as paid (the payout
+        // covers the earned-unpaid balance that existed at request time and
+        // since). Bump the affiliate's denormalized TotalPaidUsd.
+        var earned = await db.Commissions
+            .Where(c => c.AffiliateId == pr.AffiliateId && c.Status == "earned")
+            .ToListAsync();
+        decimal paidSum = 0m;
+        foreach (var c in earned)
+        {
+            c.Status = "paid";
+            c.PaidOutAt = now;
+            paidSum += c.CommissionAmountUsd;
+        }
+
+        var affiliate = await db.Affiliates.FirstOrDefaultAsync(a => a.Id == pr.AffiliateId);
+        if (affiliate is not null) affiliate.TotalPaidUsd += paidSum;
+
+        pr.Status = "paid";
+        pr.PaidAt = now;
+        if (!string.IsNullOrWhiteSpace(body?.Notes)) pr.AdminNotes = body!.Notes;
+
+        await db.SaveChangesAsync();
+        return Results.Ok(new { ok = true, paidOut = paidSum, paidAt = now });
+    }
+
+    private static async Task<IResult> RejectPayout(
+        string id,
+        [FromBody] PayoutActionRequest? body,
+        LicensingDbContext db)
+    {
+        if (!Guid.TryParse(id, out var guid))
+            return Results.BadRequest(new { error = "Bad id" });
+        var pr = await db.PayoutRequests.FirstOrDefaultAsync(x => x.Id == guid);
+        if (pr is null) return Results.NotFound();
+        if (pr.Status != "requested")
+            return Results.BadRequest(new { error = $"Payout is '{pr.Status}', only 'requested' can be rejected." });
+
+        pr.Status = "rejected";
+        pr.RejectedAt = DateTime.UtcNow;
+        if (!string.IsNullOrWhiteSpace(body?.Notes)) pr.AdminNotes = body!.Notes;
+        await db.SaveChangesAsync();
+        return Results.Ok(new { ok = true });
+    }
+
+    // ===================== SETTINGS: linked affiliate discount =====================
+
+    private static async Task<IResult> GetAffiliateDiscount(LicensingDbContext db)
+    {
+        var setting = await db.AppSettings.FirstOrDefaultAsync(s => s.Key == "AffiliateDiscountCodeId");
+        Guid? linkedId = null;
+        if (setting is not null && Guid.TryParse(setting.Value, out var g)) linkedId = g;
+
+        object? linked = null;
+        if (linkedId is Guid id)
+        {
+            linked = await db.DiscountCodes
+                .Where(d => d.Id == id)
+                .Select(d => new { d.Id, d.Code, d.DiscountPercent, d.DiscountFlatUsd, d.Enabled })
+                .FirstOrDefaultAsync();
+        }
+        return Results.Ok(new { linkedDiscountCodeId = linkedId, linked });
+    }
+
+    public class SetAffiliateDiscountRequest { public string? DiscountCodeId { get; set; } }
+
+    private static async Task<IResult> SetAffiliateDiscount(
+        [FromBody] SetAffiliateDiscountRequest req,
+        LicensingDbContext db)
+    {
+        // Empty / null => clear the link (affiliate codes give no discount).
+        string? value = null;
+        if (!string.IsNullOrWhiteSpace(req.DiscountCodeId))
+        {
+            if (!Guid.TryParse(req.DiscountCodeId, out var id))
+                return Results.BadRequest(new { error = "Bad discount code id" });
+            var exists = await db.DiscountCodes.AnyAsync(d => d.Id == id);
+            if (!exists) return Results.BadRequest(new { error = "Discount code not found" });
+            value = id.ToString();
+        }
+
+        var setting = await db.AppSettings.FirstOrDefaultAsync(s => s.Key == "AffiliateDiscountCodeId");
+        if (setting is null)
+        {
+            setting = new AppSetting { Key = "AffiliateDiscountCodeId", Value = value, UpdatedAt = DateTime.UtcNow };
+            db.AppSettings.Add(setting);
+        }
+        else
+        {
+            setting.Value = value;
+            setting.UpdatedAt = DateTime.UtcNow;
+        }
+        await db.SaveChangesAsync();
+        return Results.Ok(new { ok = true, linkedDiscountCodeId = value });
     }
 
     // ===================== HELPERS =====================

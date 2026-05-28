@@ -1,4 +1,6 @@
 using LTC.Server.Models;
+using LTC.Server.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace LTC.Server.Services;
 
@@ -25,11 +27,13 @@ namespace LTC.Server.Services;
 public class CheckoutValidationService
 {
     private readonly AffiliateService _aff;
+    private readonly LicensingDbContext _db;
     private readonly ILogger<CheckoutValidationService> _log;
 
-    public CheckoutValidationService(AffiliateService aff, ILogger<CheckoutValidationService> log)
+    public CheckoutValidationService(AffiliateService aff, LicensingDbContext db, ILogger<CheckoutValidationService> log)
     {
         _aff = aff;
+        _db = db;
         _log = log;
     }
 
@@ -113,15 +117,60 @@ public class CheckoutValidationService
                     return Fail(catalog, "You can't use your own referral code.");
                 }
 
-                // Affiliate codes give NO discount to the buyer; they credit
-                // the referrer a commission. Buyer pays full price.
-                return new ValidationResult(true, "affiliate", catalog, 0, catalog,
-                    "Referral code applied", normalized);
+                // Affiliate codes now ALSO grant the buyer a discount, taken
+                // from the globally-linked discount code (admin-configurable via
+                // the AppSetting "AffiliateDiscountCodeId"). If no code is linked,
+                // affiliate codes give no discount (legacy behavior). The buyer
+                // pays the discounted price; the affiliate's commission is later
+                // computed on that discounted AmountUsd (in CommissionService).
+                var linked = await GetLinkedAffiliateDiscountAsync(ct).ConfigureAwait(false);
+                if (linked is null)
+                {
+                    return new ValidationResult(true, "affiliate", catalog, 0, catalog,
+                        "Referral code applied", normalized);
+                }
+
+                // Compute the linked discount against the catalog price.
+                decimal affDiscount;
+                if (linked.DiscountPercent > 0)
+                    affDiscount = Math.Round(catalog * linked.DiscountPercent / 100m, 2);
+                else
+                    affDiscount = linked.DiscountFlatUsd;
+
+                if (affDiscount > catalog - 1m) affDiscount = catalog - 1m;   // keep >= $1
+                if (affDiscount < 0m) affDiscount = 0m;
+
+                var affFinal = catalog - affDiscount;
+                var affMsg = linked.DiscountPercent > 0
+                    ? $"Referral code applied — {linked.DiscountPercent}% off"
+                    : $"Referral code applied — ${linked.DiscountFlatUsd:0.##} off";
+
+                return new ValidationResult(true, "affiliate", catalog, affDiscount, affFinal,
+                    affMsg, normalized);
             }
 
             default:
                 return Fail(catalog, "That code isn't valid.");
         }
+    }
+
+    /// <summary>
+    /// Returns the DiscountCode linked as the global "affiliate discount" via
+    /// the AppSetting "AffiliateDiscountCodeId", or null if none is set, the
+    /// setting is empty, the code no longer exists, or the code is disabled.
+    /// </summary>
+    private async Task<DiscountCode?> GetLinkedAffiliateDiscountAsync(CancellationToken ct)
+    {
+        var setting = await _db.AppSettings
+            .FirstOrDefaultAsync(s => s.Key == "AffiliateDiscountCodeId", ct)
+            .ConfigureAwait(false);
+        if (setting is null || string.IsNullOrWhiteSpace(setting.Value))
+            return null;
+        if (!Guid.TryParse(setting.Value, out var id))
+            return null;
+        var dc = await _db.DiscountCodes.FirstOrDefaultAsync(d => d.Id == id, ct).ConfigureAwait(false);
+        if (dc is null || !dc.Enabled) return null;
+        return dc;
     }
 
     private static ValidationResult Fail(decimal catalog, string message) =>

@@ -203,3 +203,55 @@ public class Commission
     [MaxLength(256)]
     public string? Notes { get; set; }
 }
+
+/// <summary>
+/// A withdrawal request raised by an affiliate from their dashboard once their
+/// EARNED (cleared) balance reaches the payout threshold. Admin reviews these
+/// in the payouts queue and marks them paid (which marks the underlying earned
+/// commissions paid and bumps the affiliate's TotalPaidUsd).
+///
+/// status: "requested" -> "paid"  (or "rejected")
+/// </summary>
+public class PayoutRequest
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    public Guid AffiliateId { get; set; }
+    public Affiliate Affiliate { get; set; } = null!;
+
+    /// <summary>Amount requested = the affiliate's earned-unpaid balance at request time.</summary>
+    public decimal AmountUsd { get; set; }
+
+    /// <summary>"requested" | "paid" | "rejected"</summary>
+    [Required, MaxLength(16)]
+    public string Status { get; set; } = "requested";
+
+    /// <summary>Affiliate's payout destination note typed at request time (e.g. USDT address).</summary>
+    [MaxLength(256)]
+    public string? PayoutDetails { get; set; }
+
+    public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? PaidAt { get; set; }
+    public DateTime? RejectedAt { get; set; }
+
+    /// <summary>Admin note ("paid USDT 0xabc…", "rejected: details invalid").</summary>
+    [MaxLength(256)]
+    public string? AdminNotes { get; set; }
+}
+
+/// <summary>
+/// Tiny key/value store for global settings configurable from the admin panel.
+/// Currently used for the "linked affiliate-discount code" — the discount code
+/// whose discount is granted to buyers who use ANY affiliate code.
+/// Key: "AffiliateDiscountCodeId" -> value: a DiscountCode.Id (Guid string), or empty/absent = none.
+/// </summary>
+public class AppSetting
+{
+    [Key, MaxLength(64)]
+    public string Key { get; set; } = "";
+
+    [MaxLength(256)]
+    public string? Value { get; set; }
+
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}

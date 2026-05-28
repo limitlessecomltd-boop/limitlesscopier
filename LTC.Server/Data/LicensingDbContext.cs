@@ -51,6 +51,8 @@ public class LicensingDbContext : DbContext
     public DbSet<DiscountCode> DiscountCodes => Set<DiscountCode>();
     public DbSet<CodeRedemption> CodeRedemptions => Set<CodeRedemption>();
     public DbSet<Commission> Commissions => Set<Commission>();
+    public DbSet<PayoutRequest> PayoutRequests => Set<PayoutRequest>();
+    public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     // === DASHBOARD: END ===
 
     protected override void OnModelCreating(ModelBuilder mb)
@@ -162,6 +164,34 @@ public class LicensingDbContext : DbContext
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.EligibleAt);
         });
+
+        // === PAYOUT: BEGIN ===
+        mb.Entity<PayoutRequest>(e =>
+        {
+            e.ToTable("PayoutRequests");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.AmountUsd).HasPrecision(18, 2);
+            e.Property(x => x.Status).HasMaxLength(16).IsRequired();
+            e.Property(x => x.PayoutDetails).HasMaxLength(256);
+            e.Property(x => x.AdminNotes).HasMaxLength(256);
+
+            e.HasOne(x => x.Affiliate)
+             .WithMany()
+             .HasForeignKey(x => x.AffiliateId)
+             .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasIndex(x => x.AffiliateId);
+            e.HasIndex(x => x.Status);
+        });
+
+        mb.Entity<AppSetting>(e =>
+        {
+            e.ToTable("AppSettings");
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasMaxLength(64);
+            e.Property(x => x.Value).HasMaxLength(256);
+        });
+        // === PAYOUT: END ===
         // === DASHBOARD: END ===
     }
 }
